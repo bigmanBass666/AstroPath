@@ -96,24 +96,82 @@
       <template #header>
         <span>实践经历</span>
       </template>
-      <el-form>
-        <el-form-item label="实习经历">
-          <el-button @click="addInternship">+ 添加实习</el-button>
-          <div v-if="form.practice.internships.length === 0" class="empty-tip">暂无实习经历</div>
-          <div v-for="(item, index) in form.practice.internships" :key="index" class="list-item">
-            {{ item.company }} - {{ item.position }}
-            <el-button type="text" size="small" @click="removeInternship(index)">删除</el-button>
+
+      <!-- Tab 标签页 -->
+      <el-tabs v-model="practiceTab" class="practice-tabs">
+        <!-- 实习经历 Tab -->
+        <el-tab-pane label="实习经历" name="internship">
+          <div class="tab-header">
+            <el-button type="primary" @click="openInternshipDialog">+ 添加实习经历</el-button>
+            <div v-if="form.practice.internships.length === 0" class="empty-tip">暂无实习经历，点击按钮添加</div>
+            <div v-for="(item, index) in form.practice.internships" :key="'int-'+index" class="list-item enhanced">
+              <div class="item-content">
+                <div class="item-header">
+                  <strong>{{ item.company }}</strong>
+                  <el-tag size="small" type="primary">{{ item.position }}</el-tag>
+                </div>
+                <div class="item-meta">
+                  <span class="item-duration"><i class="el-icon-time"></i> {{ item.duration }}</span>
+                  <span v-if="item.description" class="item-desc">{{ item.description }}</span>
+                </div>
+              </div>
+              <div class="item-actions">
+                <el-button type="primary" size="small" plain @click="editInternship(index)">编辑</el-button>
+                <el-button type="danger" size="small" plain @click="deleteInternship(index)">删除</el-button>
+              </div>
+            </div>
           </div>
-        </el-form-item>
-        <el-form-item label="竞赛获奖">
-          <el-button @click="addCompetition">+ 添加竞赛</el-button>
-          <div v-if="form.practice.competitions.length === 0" class="empty-tip">暂无竞赛记录</div>
-          <div v-for="(item, index) in form.practice.competitions" :key="index" class="list-item">
-            {{ item.name }} - {{ item.award }}
-            <el-button type="text" size="small" @click="removeCompetition(index)">删除</el-button>
+        </el-tab-pane>
+
+        <!-- 竞赛获奖 Tab -->
+        <el-tab-pane label="竞赛获奖" name="competition">
+          <div class="tab-header">
+            <el-button type="primary" @click="openCompetitionDialog">+ 添加竞赛获奖</el-button>
+            <div v-if="form.practice.competitions.length === 0" class="empty-tip">暂无竞赛记录，点击按钮添加</div>
+            <div v-for="(item, index) in form.practice.competitions" :key="'comp-'+index" class="list-item enhanced">
+              <div class="item-content">
+                <div class="item-header">
+                  <strong>{{ item.name }}</strong>
+                  <el-tag size="small" :type="getAwardLevelType(item.level)">{{ item.level }}</el-tag>
+                </div>
+                <div class="item-meta">
+                  <span class="item-award"><i class="el-icon-medal"></i> {{ item.award }}</span>
+                  <span v-if="item.time" class="item-time">{{ item.time }}</span>
+                </div>
+              </div>
+              <div class="item-actions">
+                <el-button type="primary" size="small" plain @click="editCompetition(index)">编辑</el-button>
+                <el-button type="danger" size="small" plain @click="deleteCompetition(index)">删除</el-button>
+              </div>
+            </div>
           </div>
-        </el-form-item>
-      </el-form>
+        </el-tab-pane>
+
+        <!-- 志愿服务 Tab -->
+        <el-tab-pane label="志愿服务" name="volunteer">
+          <div class="tab-header">
+            <el-button type="primary" @click="openVolunteerDialog">+ 添加志愿服务</el-button>
+            <div v-if="form.practice.volunteers.length === 0" class="empty-tip">暂无志愿服务记录，点击按钮添加</div>
+            <div v-for="(item, index) in form.practice.volunteers" :key="'vol-'+index" class="list-item enhanced">
+              <div class="item-content">
+                <div class="item-header">
+                  <strong>{{ item.organization }}</strong>
+                  <el-tag size="small" type="success">{{ item.role }}</el-tag>
+                </div>
+                <div class="item-meta">
+                  <span class="item-duration"><i class="el-icon-time"></i> {{ item.duration }}</span>
+                  <span v-if="item.description" class="item-desc">{{ item.description }}</span>
+                </div>
+              </div>
+              <div class="item-actions">
+                <el-button type="primary" size="small" plain @click="editVolunteer(index)">编辑</el-button>
+                <el-button type="danger" size="small" plain @click="deleteVolunteer(index)">删除</el-button>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+
       <div class="step-actions">
         <el-button @click="prevStep">上一步</el-button>
         <el-button type="primary" @click="generateReport">生成评估报告</el-button>
@@ -171,6 +229,77 @@
         <el-button type="primary" @click="saveResearch">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 实习经历模态框 -->
+    <el-dialog v-model="internshipDialogVisible" :title="isEditingInternship ? '编辑实习经历' : '添加实习经历'" width="500px">
+      <el-form :model="currentInternship" :rules="internshipRules" ref="internshipFormRef" label-width="100px">
+        <el-form-item label="公司名称" prop="company">
+          <el-input v-model="currentInternship.company" placeholder="请输入公司名称" />
+        </el-form-item>
+        <el-form-item label="职位名称" prop="position">
+          <el-input v-model="currentInternship.position" placeholder="如：前端工程师实习生、数据分析实习生" />
+        </el-form-item>
+        <el-form-item label="实习时长" prop="duration">
+          <el-input v-model="currentInternship.duration" placeholder="如：3个月、6个月、1年" />
+        </el-form-item>
+        <el-form-item label="工作描述" prop="description">
+          <el-input v-model="currentInternship.description" type="textarea" :rows="3" placeholder="简要描述工作内容和收获（可选）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="closeInternshipDialog">取消</el-button>
+        <el-button type="primary" @click="saveInternship">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 竞赛获奖模态框 -->
+    <el-dialog v-model="competitionDialogVisible" :title="isEditingCompetition ? '编辑竞赛记录' : '添加竞赛获奖'" width="500px">
+      <el-form :model="currentCompetition" :rules="competitionRules" ref="competitionFormRef" label-width="100px">
+        <el-form-item label="竞赛名称" prop="name">
+          <el-input v-model="currentCompetition.name" placeholder="请输入竞赛名称" />
+        </el-form-item>
+        <el-form-item label="竞赛级别" prop="level">
+          <el-select v-model="currentCompetition.level" placeholder="请选择级别">
+            <el-option label="国家级" value="国家级" />
+            <el-option label="省级" value="省级" />
+            <el-option label="校级" value="校级" />
+            <el-option label="其他" value="其他" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="获奖情况" prop="award">
+          <el-input v-model="currentCompetition.award" placeholder="如：一等奖、银奖、优秀奖" />
+        </el-form-item>
+        <el-form-item label="参赛时间" prop="time">
+          <el-input v-model="currentCompetition.time" placeholder="如：2024年3月（可选）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="closeCompetitionDialog">取消</el-button>
+        <el-button type="primary" @click="saveCompetition">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 志愿服务模态框 -->
+    <el-dialog v-model="volunteerDialogVisible" :title="isEditingVolunteer ? '编辑志愿服务' : '添加志愿服务'" width="500px">
+      <el-form :model="currentVolunteer" :rules="volunteerRules" ref="volunteerFormRef" label-width="100px">
+        <el-form-item label="组织名称" prop="organization">
+          <el-input v-model="currentVolunteer.organization" placeholder="请输入服务组织名称" />
+        </el-form-item>
+        <el-form-item label="志愿岗位" prop="role">
+          <el-input v-model="currentVolunteer.role" placeholder="如：活动志愿者、支教老师、社区服务" />
+        </el-form-item>
+        <el-form-item label="服务时长" prop="duration">
+          <el-input v-model="currentVolunteer.duration" placeholder="如：20小时、1个月" />
+        </el-form-item>
+        <el-form-item label="服务描述" prop="description">
+          <el-input v-model="currentVolunteer.description" type="textarea" :rows="3" placeholder="简要描述服务内容和感受（可选）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="closeVolunteerDialog">取消</el-button>
+        <el-button type="primary" @click="saveVolunteer">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -182,12 +311,33 @@ import * as echarts from 'echarts'
 
 const router = useRouter()
 const currentStep = ref(0)
+const practiceTab = ref('internship')
 const basicFormRef = ref(null)
 const radarRef = ref(null)
+
+// 科研经历模态框
 const researchDialogVisible = ref(false)
 const isEditingResearch = ref(false)
 const editingResearchIndex = ref(-1)
 const researchFormRef = ref(null)
+
+// 实习经历模态框
+const internshipDialogVisible = ref(false)
+const isEditingInternship = ref(false)
+const editingInternshipIndex = ref(-1)
+const internshipFormRef = ref(null)
+
+// 竞赛获奖模态框
+const competitionDialogVisible = ref(false)
+const isEditingCompetition = ref(false)
+const editingCompetitionIndex = ref(-1)
+const competitionFormRef = ref(null)
+
+// 志愿服务模态框
+const volunteerDialogVisible = ref(false)
+const isEditingVolunteer = ref(false)
+const editingVolunteerIndex = ref(-1)
+const volunteerFormRef = ref(null)
 
 const basicRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
@@ -200,6 +350,48 @@ const researchRules = {
   role: [{ required: true, message: '请选择担任角色', trigger: 'blur' }],
   duration: [{ required: true, message: '请输入项目时长', trigger: 'blur' }]
 }
+
+// 实习表单规则和数据
+const internshipRules = {
+  company: [{ required: true, message: '请输入公司名称', trigger: 'blur' }],
+  position: [{ required: true, message: '请输入职位名称', trigger: 'blur' }],
+  duration: [{ required: true, message: '请输入实习时长', trigger: 'blur' }]
+}
+
+const currentInternship = reactive({
+  company: '',
+  position: '',
+  duration: '',
+  description: ''
+})
+
+// 竞赛表单规则和数据
+const competitionRules = {
+  name: [{ required: true, message: '请输入竞赛名称', trigger: 'blur' }],
+  level: [{ required: true, message: '请选择竞赛级别', trigger: 'change' }],
+  award: [{ required: true, message: '请输入获奖情况', trigger: 'blur' }]
+}
+
+const currentCompetition = reactive({
+  name: '',
+  level: '国家级',
+  award: '',
+  time: ''
+})
+
+// 志愿服务表单规则和数据
+const volunteerRules = {
+  organization: [{ required: true, message: '请输入服务组织名称', trigger: 'blur' }],
+  role: [{ required: true, message: '请输入志愿岗位', trigger: 'blur' }],
+  duration: [{ required: true, message: '请输入服务时长', trigger: 'blur' }]
+}
+
+const currentVolunteer = reactive({
+  organization: '',
+  role: '',
+  duration: '',
+  description: ''
+})
 
 const form = reactive({
   basic: {
@@ -217,7 +409,8 @@ const form = reactive({
   },
   practice: {
     internships: [],
-    competitions: []
+    competitions: [],
+    volunteers: []
   }
 })
 
@@ -255,7 +448,7 @@ const researchScore = computed(() => {
 })
 
 const practiceScore = computed(() => {
-  const total = form.practice.internships.length + form.practice.competitions.length
+  const total = form.practice.internships.length + form.practice.competitions.length + form.practice.volunteers.length
   return Math.min(total * 1.2, 5)
 })
 
@@ -348,21 +541,222 @@ const removeResearch = (index) => {
   }).catch(() => {})
 }
 
-// 实践经历管理
-const addInternship = () => {
-  form.practice.internships.push({ company: '未命名公司', position: '实习生', duration: '3个月' })
+// 实习经历管理
+const openInternshipDialog = () => {
+  isEditingInternship.value = false
+  editingInternshipIndex.value = -1
+  resetInternshipForm()
+  internshipDialogVisible.value = true
 }
 
-const removeInternship = (index) => {
-  form.practice.internships.splice(index, 1)
+const editInternship = (index) => {
+  const item = form.practice.internships[index]
+  currentInternship.company = item.company
+  currentInternship.position = item.position
+  currentInternship.duration = item.duration
+  currentInternship.description = item.description || ''
+  isEditingInternship.value = true
+  editingInternshipIndex.value = index
+  internshipDialogVisible.value = true
 }
 
-const addCompetition = () => {
-  form.practice.competitions.push({ name: '未命名竞赛', award: '参与奖' })
+const saveInternship = async () => {
+  await internshipFormRef.value.validate((valid) => {
+    if (valid) {
+      if (isEditingInternship.value) {
+        const index = editingInternshipIndex.value
+        form.practice.internships[index] = {
+          ...form.practice.internships[index],
+          company: currentInternship.company,
+          position: currentInternship.position,
+          duration: currentInternship.duration,
+          description: currentInternship.description
+        }
+        ElMessage.success('实习经历已更新')
+      } else {
+        form.practice.internships.push({
+          company: currentInternship.company,
+          position: currentInternship.position,
+          duration: currentInternship.duration,
+          description: currentInternship.description
+        })
+        ElMessage.success('实习经历已添加')
+      }
+      closeInternshipDialog()
+    }
+  })
 }
 
-const removeCompetition = (index) => {
-  form.practice.competitions.splice(index, 1)
+const closeInternshipDialog = () => {
+  internshipDialogVisible.value = false
+  resetInternshipForm()
+}
+
+const resetInternshipForm = () => {
+  currentInternship.company = ''
+  currentInternship.position = ''
+  currentInternship.duration = ''
+  currentInternship.description = ''
+}
+
+const deleteInternship = (index) => {
+  ElMessageBox.confirm('确定要删除这条实习经历吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    form.practice.internships.splice(index, 1)
+    ElMessage.success('已删除')
+  }).catch(() => {})
+}
+
+// 竞赛获奖管理
+const openCompetitionDialog = () => {
+  isEditingCompetition.value = false
+  editingCompetitionIndex.value = -1
+  resetCompetitionForm()
+  competitionDialogVisible.value = true
+}
+
+const editCompetition = (index) => {
+  const item = form.practice.competitions[index]
+  currentCompetition.name = item.name
+  currentCompetition.level = item.level
+  currentCompetition.award = item.award
+  currentCompetition.time = item.time || ''
+  isEditingCompetition.value = true
+  editingCompetitionIndex.value = index
+  competitionDialogVisible.value = true
+}
+
+const saveCompetition = async () => {
+  await competitionFormRef.value.validate((valid) => {
+    if (valid) {
+      if (isEditingCompetition.value) {
+        const index = editingCompetitionIndex.value
+        form.practice.competitions[index] = {
+          ...form.practice.competitions[index],
+          name: currentCompetition.name,
+          level: currentCompetition.level,
+          award: currentCompetition.award,
+          time: currentCompetition.time
+        }
+        ElMessage.success('竞赛记录已更新')
+      } else {
+        form.practice.competitions.push({
+          name: currentCompetition.name,
+          level: currentCompetition.level,
+          award: currentCompetition.award,
+          time: currentCompetition.time
+        })
+        ElMessage.success('竞赛记录已添加')
+      }
+      closeCompetitionDialog()
+    }
+  })
+}
+
+const closeCompetitionDialog = () => {
+  competitionDialogVisible.value = false
+  resetCompetitionForm()
+}
+
+const resetCompetitionForm = () => {
+  currentCompetition.name = ''
+  currentCompetition.level = '国家级'
+  currentCompetition.award = ''
+  currentCompetition.time = ''
+}
+
+const deleteCompetition = (index) => {
+  ElMessageBox.confirm('确定要删除这条竞赛记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    form.practice.competitions.splice(index, 1)
+    ElMessage.success('已删除')
+  }).catch(() => {})
+}
+
+// 志愿服务管理
+const openVolunteerDialog = () => {
+  isEditingVolunteer.value = false
+  editingVolunteerIndex.value = -1
+  resetVolunteerForm()
+  volunteerDialogVisible.value = true
+}
+
+const editVolunteer = (index) => {
+  const item = form.practice.volunteers[index]
+  currentVolunteer.organization = item.organization
+  currentVolunteer.role = item.role
+  currentVolunteer.duration = item.duration
+  currentVolunteer.description = item.description || ''
+  isEditingVolunteer.value = true
+  editingVolunteerIndex.value = index
+  volunteerDialogVisible.value = true
+}
+
+const saveVolunteer = async () => {
+  await volunteerFormRef.value.validate((valid) => {
+    if (valid) {
+      if (isEditingVolunteer.value) {
+        const index = editingVolunteerIndex.value
+        form.practice.volunteers[index] = {
+          ...form.practice.volunteers[index],
+            organization: currentVolunteer.organization,
+          role: currentVolunteer.role,
+          duration: currentVolunteer.duration,
+          description: currentVolunteer.description
+        }
+        ElMessage.success('志愿服务已更新')
+      } else {
+        form.practice.volunteers.push({
+          organization: currentVolunteer.organization,
+          role: currentVolunteer.role,
+          duration: currentVolunteer.duration,
+          description: currentVolunteer.description
+        })
+        ElMessage.success('志愿服务已添加')
+      }
+      closeVolunteerDialog()
+    }
+  })
+}
+
+const closeVolunteerDialog = () => {
+  volunteerDialogVisible.value = false
+  resetVolunteerForm()
+}
+
+const resetVolunteerForm = () => {
+  currentVolunteer.organization = ''
+  currentVolunteer.role = ''
+  currentVolunteer.duration = ''
+  currentVolunteer.description = ''
+}
+
+const deleteVolunteer = (index) => {
+  ElMessageBox.confirm('确定要删除这条志愿服务记录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    form.practice.volunteers.splice(index, 1)
+    ElMessage.success('已删除')
+  }).catch(() => {})
+}
+
+// 获取竞赛级别标签类型
+const getAwardLevelType = (level) => {
+  const types = {
+    '国家级': 'danger',
+    '省级': 'warning',
+    '校级': 'primary',
+    '其他': 'info'
+  }
+  return types[level] || 'info'
 }
 
 const generateReport = () => {
@@ -488,55 +882,70 @@ const resetForm = () => {
   font-weight: bold;
 }
 
-.list-item {
+.practice-tabs {
+  margin-top: 10px;
+}
+
+.tab-header {
+  margin-bottom: 20px;
+}
+
+.tab-header .el-button {
+  margin-bottom: 15px;
+}
+
+.tab-content {
+  min-height: 200px;
+}
+
+.list-item.enhanced {
+  padding: 15px;
+  background: #f5f7fa;
+  margin: 10px 0;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+  transition: all 0.3s ease;
+}
+
+.list-item.enhanced:hover {
+  background: #ecf5ff;
+  transform: translateX(5px);
+}
+
+.item-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 15px;
-  background: #f5f7fa;
-  margin: 8px 0;
-  border-radius: 8px;
-  border-left: 3px solid #667eea;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
-.item-content {
+.item-meta {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 15px;
+  align-items: center;
+  font-size: 13px;
+  color: #606266;
+}
+
+.item-meta i {
+  margin-right: 4px;
+}
+
+.item-desc {
   flex: 1;
-}
-
-.item-content strong {
-  font-size: 14px;
-  color: #303133;
-}
-
-.item-role {
-  font-size: 12px;
-  color: #409eff;
-  background: #ecf5ff;
-  padding: 2px 8px;
-  border-radius: 4px;
-  align-self: flex-start;
-}
-
-.item-duration {
-  font-size: 12px;
+  min-width: 200px;
   color: #909399;
-}
-
-.item-achievements {
-  font-size: 12px;
-  color: #67c23a;
-  margin-top: 4px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  line-height: 1.5;
 }
 
 .item-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.el-tag {
+  font-size: 12px;
 }
 </style>
