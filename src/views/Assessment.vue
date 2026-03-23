@@ -174,7 +174,7 @@
 
       <div class="step-actions">
         <el-button @click="prevStep">上一步</el-button>
-        <el-button type="primary" @click="generateReport">生成评估报告</el-button>
+        <el-button type="primary" @click="generateReport" :loading="isLoading">生成评估报告</el-button>
       </div>
     </el-card>
 
@@ -183,27 +183,68 @@
       <template #header>
         <span>竞争力评估报告</span>
       </template>
-      <div class="report-summary">
+
+      <!-- 加载动画 -->
+      <div v-if="isLoading" class="loading-container">
+        <el-loading :fullscreen="true" tip="正在生成评估报告..."></el-loading>
+      </div>
+
+      <div v-else class="report-summary">
         <h3>综合评估结果</h3>
         <p>根据您填写的信息，系统生成了以下评估报告</p>
       </div>
-      <div class="report-content">
+      <div v-if="!isLoading" class="report-content">
         <div class="score-overview">
           <el-rate v-model="overallScore" disabled :max="5" />
           <span class="score-text">竞争力总分: {{ overallScore.toFixed(1) }}/5.0</span>
         </div>
+
+        <!-- GPA评级和语言成绩分析 -->
+        <div class="analysis-section">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <div class="analysis-card">
+                <h4><i class="el-icon-school"></i> GPA 评级</h4>
+                <div class="gpa-analysis">
+                  <span class="gpa-value">GPA: {{ form.basic.gpa.toFixed(1) }}</span>
+                  <span class="gpa-grade" :class="getGpaGradeClass(form.basic.gpa)">{{ getGpaGrade(form.basic.gpa) }}</span>
+                </div>
+                <p class="analysis-detail">{{ getGpaComment(form.basic.gpa, form.basic.university) }}</p>
+              </div>
+            </el-col>
+            <el-col :span="12">
+              <div class="analysis-card">
+                <h4><i class="el-icon-chat-line-round"></i> 语言成绩分析</h4>
+                <div class="language-analysis">
+                  <span class="lang-text">{{ form.basic.language || '未填写' }}</span>
+                  <span class="lang-level" :class="getLanguageScoreClass()">{{ getLanguageLevel() }}</span>
+                </div>
+                <p class="analysis-detail">{{ getLanguageComment() }}</p>
+              </div>
+            </el-col>
+          </el-row>
+        </div>
+
         <div class="radar-chart" ref="radarRef" style="height: 400px;"></div>
         <div class="report-details">
           <h4>详细分析</h4>
           <ul>
-            <li><strong>学术能力：</strong>{{ academicScore.toFixed(1) }}/5 (院校背景+均分)</li>
-            <li><strong>语言能力：</strong>{{ languageScore.toFixed(1) }}/5</li>
-            <li><strong>科研经历：</strong>{{ researchScore.toFixed(1) }}/5</li>
-            <li><strong>实践背景：</strong>{{ practiceScore.toFixed(1) }}/5</li>
+            <li><strong>学术能力：</strong>{{ academicScore.toFixed(1) }}/5
+              <span class="score-comment">{{ getAcademicComment() }}</span>
+            </li>
+            <li><strong>语言能力：</strong>{{ languageScore.toFixed(1) }}/5
+              <span class="score-comment">{{ getLanguageComment() }}</span>
+            </li>
+            <li><strong>科研经历：</strong>{{ researchScore.toFixed(1) }}/5
+              <span class="score-comment">{{ getResearchComment() }}</span>
+            </li>
+            <li><strong>实践背景：</strong>{{ practiceScore.toFixed(1) }}/5
+              <span class="score-comment">{{ getPracticeComment() }}</span>
+            </li>
           </ul>
         </div>
       </div>
-      <div class="step-actions">
+      <div v-if="!isLoading" class="step-actions">
         <el-button type="primary" @click="saveReport">保存评估结果</el-button>
         <el-button @click="resetForm">重新填写</el-button>
       </div>
@@ -759,7 +800,88 @@ const getAwardLevelType = (level) => {
   return types[level] || 'info'
 }
 
-const generateReport = () => {
+// GPA 评级
+const getGpaGrade = (gpa) => {
+  if (gpa >= 3.8) return '优秀'
+  if (gpa >= 3.5) return '良好'
+  if (gpa >= 3.0) return '中等'
+  if (gpa >= 2.5) return '及格'
+  return '需提升'
+}
+
+const getGpaGradeClass = (gpa) => {
+  if (gpa >= 3.8) return 'grade-excellent'
+  if (gpa >= 3.5) return 'grade-good'
+  if (gpa >= 3.0) return 'grade-medium'
+  if (gpa >= 2.5) return 'grade-pass'
+  return 'grade-low'
+}
+
+const getGpaComment = (gpa, university) => {
+  const uniComment = university === '985' ? '985院校背景加分' : university === '211' ? '211院校背景加分' : ''
+  if (gpa >= 3.8) return `您的GPA表现非常出色，${uniComment}在申请中具有很强竞争力。`
+  if (gpa >= 3.5) return `您的GPA表现良好，${uniComment}申请大多数项目都有不错机会。`
+  if (gpa >= 3.0) return `您的GPA处于中等水平，建议通过其他经历弥补。`
+  return `您的GPA相对较低，需要重点突出其他优势或考虑提升路径。`
+}
+
+// 语言成绩分析
+const getLanguageLevel = () => {
+  const lang = form.basic.language
+  if (!lang) return '未评估'
+  if (lang.includes('雅思') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 7) return '优秀'
+  if (lang.includes('托福') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 100) return '优秀'
+  if (lang.includes('雅思') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 6.5) return '良好'
+  if (lang.includes('托福') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 90) return '良好'
+  return '需提升'
+}
+
+const getLanguageScoreClass = () => {
+  const level = getLanguageLevel()
+  return level === '优秀' ? 'score-excellent' : level === '良好' ? 'score-good' : 'score-low'
+}
+
+const getLanguageComment = () => {
+  const lang = form.basic.language
+  if (!lang) return '请填写语言成绩以获取详细评估。'
+  if (lang.includes('雅思') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 7) return '雅思7分以上满足大部分TOP院校要求。'
+  if (lang.includes('托福') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 100) return '托福100分以上竞争力很强。'
+  if (lang.includes('雅思') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 6.5) return '雅思6.5分可申请多数院校，建议冲刺更高。'
+  if (lang.includes('托福') && parseFloat(lang.match(/\d+/)?.[0] || 0) >= 90) return '托福90分基本达标，建议争取更高分数。'
+  return '当前语言成绩可能不足，建议备考或考虑语言课程。'
+}
+
+// 各维度评语
+const getAcademicComment = () => {
+  const score = academicScore.value
+  if (score >= 4) return '学术背景非常优秀，申请优势明显。'
+  if (score >= 3) return '学术背景良好，具备一定竞争力。'
+  if (score >= 2) return '学术背景中等，建议补充其他优势。'
+  return '学术背景较弱，需要重点突出其他亮点。'
+}
+
+const getResearchComment = () => {
+  const count = form.academic.research.length
+  if (count >= 3) return '科研经历丰富，展现了研究能力。'
+  if (count >= 1) return '有一定科研基础，可进一步深化。'
+  return '建议增加科研经历以提升竞争力。'
+}
+
+const getPracticeComment = () => {
+  const total = form.practice.internships.length + form.practice.competitions.length + form.practice.volunteers.length
+  if (total >= 5) return '实践经历丰富，展现了综合能力。'
+  if (total >= 3) return '有一定实践经验，可继续积累。'
+  if (total >= 1) return '实践经验较少，建议补充。'
+  return '实践经历空白，强烈建议补充。'
+}
+
+const isLoading = ref(false)
+
+const generateReport = async () => {
+  isLoading.value = true
+  // 模拟3秒加载时间
+  await new Promise(resolve => setTimeout(resolve, 3000))
+  isLoading.value = false
   currentStep.value = 3
   nextTick(() => {
     renderRadarChart()
@@ -880,6 +1002,83 @@ const resetForm = () => {
   font-size: 18px;
   color: #667eea;
   font-weight: bold;
+}
+
+/* 加载动画 */
+.loading-container {
+  text-align: center;
+  padding: 60px 0;
+}
+
+/* 分析区域 */
+.analysis-section {
+  margin: 30px 0;
+}
+
+.analysis-card {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.analysis-card h4 {
+  margin: 0 0 15px 0;
+  color: #409eff;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analysis-card h4 i {
+  font-size: 18px;
+}
+
+.gpa-analysis, .language-analysis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.gpa-value, .lang-text {
+  font-size: 20px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.gpa-grade, .lang-level {
+  font-size: 18px;
+  font-weight: bold;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.grade-excellent { background: #f0f9eb; color: #67c23a; }
+.grade-good { background: #ecf5ff; color: #409eff; }
+.grade-medium { background: #fdf6ec; color: #e6a23c; }
+.grade-pass { background: #fef0f0; color: #f56c6c; }
+.grade-low { background: #fef0f0; color: #f56c6c; }
+
+.score-excellent { background: #f0f9eb; color: #67c23a; }
+.score-good { background: #ecf5ff; color: #409eff; }
+.score-low { background: #fef0f0; color: #f56c6c; }
+
+.analysis-detail {
+  margin: 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.score-comment {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  color: #909399;
+  font-weight: normal;
 }
 
 .practice-tabs {
