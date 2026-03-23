@@ -33,7 +33,7 @@
         "在任意需要AI功能的页面，验证provider选择器显示所有已配置的provider",
         "切换不同provider，执行相同的AI请求（如文书生成），验证请求发送到对应provider"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F004",
