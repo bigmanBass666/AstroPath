@@ -345,7 +345,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts'
@@ -355,6 +355,7 @@ const currentStep = ref(0)
 const practiceTab = ref('internship')
 const basicFormRef = ref(null)
 const radarRef = ref(null)
+let radarChart = null
 
 // 科研经历模态框
 const researchDialogVisible = ref(false)
@@ -890,9 +891,58 @@ const generateReport = async () => {
 
 const renderRadarChart = () => {
   if (!radarRef.value) return
-  const chart = echarts.init(radarRef.value)
-  chart.setOption({
-    title: { text: '竞争力雷达图' },
+
+  // 如果已存在图表实例，先销毁
+  if (radarChart) {
+    radarChart.dispose()
+  }
+
+  // 初始化新图表
+  radarChart = echarts.init(radarRef.value)
+
+  const chartData = [
+    academicScore.value,
+    languageScore.value,
+    researchScore.value,
+    practiceScore.value,
+    overallScore.value
+  ]
+
+  radarChart.setOption({
+    title: {
+      text: '竞争力雷达图',
+      left: 'center',
+      top: 10,
+      textStyle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#303133'
+      }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: (params) => {
+        const data = params.value
+        const indicators = ['学术能力', '语言能力', '科研经历', '实践背景', '综合实力']
+        let html = '<div style="font-weight:bold;margin-bottom:5px;">各维度得分</div>'
+        indicators.forEach((name, index) => {
+          html += `<div style="display:flex;justify-content:space-between;gap:15px;">
+            <span>${name}:</span>
+            <span style="font-weight:bold;color:#667eea;">${data[index].toFixed(1)}/5.0</span>
+          </div>`
+        })
+        return html
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#667eea',
+      borderWidth: 1,
+      textStyle: {
+        color: '#303133',
+        fontSize: 12
+      },
+      padding: [10, 15],
+      extraCssText: 'box-shadow: 0 2px 12px rgba(0,0,0,0.15);border-radius:8px;'
+    },
     radar: {
       indicator: [
         { name: '学术能力', max: 5 },
@@ -900,23 +950,64 @@ const renderRadarChart = () => {
         { name: '科研经历', max: 5 },
         { name: '实践背景', max: 5 },
         { name: '综合实力', max: 5 }
-      ]
+      ],
+      shape: 'polygon',
+      splitNumber: 5,
+      splitArea: {
+        show: true,
+        areaStyle: {
+          color: ['rgba(102, 126, 234, 0.1)', 'rgba(102, 126, 234, 0.15)',
+                 'rgba(102, 126, 234, 0.2)', 'rgba(102, 126, 234, 0.25)',
+                 'rgba(102, 126, 234, 0.3)']
+        }
+      },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(102, 126, 234, 0.3)'
+        }
+      },
+      axisLine: {
+        lineStyle: {
+          color: 'rgba(102, 126, 234, 0.3)'
+        }
+      },
+      axisName: {
+        color: '#606266',
+        fontSize: 13,
+        fontWeight: 'bold',
+        padding: [3, 5]
+      }
     },
     series: [{
       name: '竞争力',
       type: 'radar',
       data: [{
-        value: [
-          academicScore.value,
-          languageScore.value,
-          researchScore.value,
-          practiceScore.value,
-          overallScore.value
-        ],
-        areaStyle: { color: 'rgba(102, 126, 234, 0.3)' }
-      }]
+        value: chartData,
+        name: '当前评估',
+        areaStyle: {
+          color: 'rgba(102, 126, 234, 0.35)'
+        },
+        lineStyle: {
+          width: 2,
+          color: 'rgb(102, 126, 234)'
+        },
+        itemStyle: {
+          color: 'rgb(102, 126, 234)',
+          borderWidth: 2,
+          borderColor: '#fff'
+        }
+      }],
+      animationDuration: 1000,
+      animationEasing: 'cubicOut'
     }]
   })
+}
+
+// 窗口大小变化时重新调整图表尺寸
+const handleResize = () => {
+  if (radarChart) {
+    radarChart.resize()
+  }
 }
 
 const saveReport = () => {
@@ -948,6 +1039,20 @@ const resetForm = () => {
     currentStep.value = 0
   }).catch(() => {})
 }
+
+// 组件挂载时添加窗口resize监听
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (radarChart) {
+    radarChart.dispose()
+    radarChart = null
+  }
+})
 </script>
 
 <style scoped>
