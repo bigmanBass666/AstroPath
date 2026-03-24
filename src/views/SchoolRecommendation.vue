@@ -1,0 +1,314 @@
+<template>
+  <div class="school-recommendation-page">
+    <h2 class="page-title">AI智能选校推荐</h2>
+
+    <el-card class="intro-card" v-if="!hasAssessment">
+      <el-result icon="info" title="请先完成背景评估" sub-title="系统需要您的背景信息才能进行精准推荐">
+        <template #extra>
+          <el-button type="primary" @click="$router.push('/assessment')">去评估</el-button>
+        </template>
+      </el-result>
+    </el-card>
+
+    <template v-else>
+      <!-- 背景摘要 -->
+      <el-card class="summary-card">
+        <template #header>
+          <span>您的背景摘要</span>
+        </template>
+        <div class="summary-content">
+          <el-tag type="primary">GPA: {{ assessment.basic.gpa }}</el-tag>
+          <el-tag type="success">院校: {{ assessment.basic.university }}</el-tag>
+          <el-tag type="warning">均分: {{ assessment.academic.averageScore }}</el-tag>
+          <el-tag type="info">总分: {{ assessment.scores?.overall?.toFixed(1) || 'N/A' }}</el-tag>
+        </div>
+      </el-card>
+
+      <!-- 推荐控制 -->
+      <el-card class="control-card">
+        <div class="control-row">
+          <el-select v-model="strategy" placeholder="选择推荐策略" style="width: 200px;">
+            <el-option label="冲刺院校" value="reach" />
+            <el-option label="目标院校" value="match" />
+            <el-option label="保底院校" value="safe" />
+          </el-select>
+          <el-button type="primary" @click="startRecommendation" :loading="recommending">
+            {{ recommending ? '计算中...' : '开始推荐' }}
+          </el-button>
+          <el-button @click="toggleCompare" :disabled="selectedSchools.length === 0">
+            对比选中 ({{ selectedSchools.length }})
+          </el-button>
+        </div>
+        <!-- 进度条 -->
+        <el-progress v-if="recommending" :percentage="progress" :status="progressStatus" style="margin-top: 15px;" />
+      </el-card>
+
+      <!-- 推荐列表 -->
+      <div class="schools-list">
+        <el-card v-for="school in schools" :key="school.id" class="school-card"
+          :class="{ 'is-selected': selectedSchools.includes(school.id) }">
+          <div class="school-header" @click="toggleSelect(school.id)">
+            <el-checkbox :model-value="selectedSchools.includes(school.id)" @click.stop />
+            <span class="school-name" @click="showDetail(school)">{{ school.name }}</span>
+            <el-tag :type="getScoreTagType(school.match)" class="match-badge">
+              匹配度 {{ school.match }}%
+            </el-tag>
+          </div>
+          <div class="school-info">
+            <p><strong>国家：</strong>{{ school.country }}</p>
+            <p><strong>专业：</strong>{{ school.major }}</p>
+            <p><strong>排名：</strong>{{ school.ranking }}</p>
+            <p><strong>截止日期：</strong>{{ school.deadline }}</p>
+          </div>
+          <div class="school-actions">
+            <el-button size="small" type="primary" plain @click="showDetail(school)">查看详情</el-button>
+            <el-button size="small" :type="favorites.includes(school.id) ? 'warning' : 'default'"
+              @click="toggleFavorite(school.id)">
+              {{ favorites.includes(school.id) ? '已收藏' : '收藏' }}
+            </el-button>
+          </div>
+        </el-card>
+      </div>
+    </template>
+
+    <!-- 详情对话框 -->
+    <el-dialog v-model="detailVisible" :title="currentSchool?.name" width="60%">
+      <div v-if="currentSchool" class="school-detail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="国家">{{ currentSchool.country }}</el-descriptions-item>
+          <el-descriptions-item label="排名">{{ currentSchool.ranking }}</el-descriptions-item>
+          <el-descriptions-item label="专业">{{ currentSchool.major }}</el-descriptions-item>
+          <el-descriptions-item label="学费">{{ currentSchool.tuition }}</el-descriptions-item>
+          <el-descriptions-item label="截止日期">{{ currentSchool.deadline }}</el-descriptions-item>
+          <el-descriptions-item label="录取率">{{ currentSchool.acceptanceRate }}</el-descriptions-item>
+        </el-descriptions>
+        <div class="requirement-section">
+          <h4>申请要求</h4>
+          <ul>
+            <li v-for="(req, index) in currentSchool.requirements" :key="index">{{ req }}</li>
+          </ul>
+        </div>
+        <p class="official-link">
+          <el-link type="primary" :href="currentSchool.website" target="_blank">访问学校官网</el-link>
+        </p>
+      </div>
+    </el-dialog>
+
+    <!-- 对比对话框 -->
+    <el-dialog v-model="compareVisible" title="学校对比" width="80%">
+      <el-table :data="compareSchools" style="width: 100%">
+        <el-table-column prop="name" label="学校" width="200" />
+        <el-table-column prop="country" label="国家" />
+        <el-table-column prop="ranking" label="排名" />
+        <el-table-column prop="match" label="匹配度">
+          <template #default="{ row }">
+            <el-progress :percentage="row.match" :color="getScoreColor(row.match)" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="tuition" label="学费" />
+        <el-table-column prop="acceptanceRate" label="录取率" />
+      </el-table>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+
+const router = useRouter()
+
+const hasAssessment = ref(false)
+const assessment = ref(null)
+const strategy = ref('match')
+const schools = ref([])
+const recommending = ref(false)
+const progress = ref(0)
+const progressStatus = ref('')
+const favorites = ref([])
+const selectedSchools = ref([])
+const detailVisible = ref(false)
+const compareVisible = ref(false)
+const currentSchool = ref(null)
+
+// 模拟院校数据
+const mockSchools = [
+  { id: 1, name: 'Harvard University', country: '美国', major: 'Computer Science', ranking: 'QS #1', match: 95, deadline: '2025-01-01', tuition: '$50,000', acceptanceRate: '4%', requirements: ['GPA 3.9+', 'GRE 330+', 'Research experience'], website: 'https://harvard.edu' },
+  { id: 2, name: 'Stanford University', country: '美国', major: 'AI', ranking: 'QS #2', match: 88, deadline: '2025-01-02', tuition: '$52,000', acceptanceRate: '4.5%', requirements: ['GPA 3.8+', 'Strong research background'], website: 'https://stanford.edu' },
+  { id: 3, name: 'MIT', country: '美国', major: 'CS', ranking: 'QS #3', match: 92, deadline: '2025-01-03', tuition: '$53,000', acceptanceRate: '3.9%', requirements: ['GPA 3.95+', 'Olympiad medals preferred'], website: 'https://mit.edu' },
+  { id: 4, name: 'Oxford University', country: '英国', major: 'CS', ranking: 'QS #4', match: 85, deadline: '2025-01-15', tuition: '£35,000', acceptanceRate: '18%', requirements: ['First Class Degree', 'Strong references'], website: 'https://ox.ac.uk' },
+  { id: 5, name: 'Cambridge University', country: '英国', major: 'CS', ranking: 'QS #5', match: 82, deadline: '2025-01-20', tuition: '£34,000', acceptanceRate: '19%', requirements: ['2:1 Degree minimum'], website: 'https://cam.ac.uk' },
+  { id: 6, name: 'Tsinghua University', country: '中国', major: 'CS', ranking: 'QS #25', match: 75, deadline: '2025-03-01', tuition: '¥30,000', acceptanceRate: '15%', requirements: ['GPA 3.5+'], website: 'https://tsinghua.edu.cn' }
+]
+
+const getScoreTagType = (score) => {
+  if (score >= 80) return 'success'
+  if (score >= 60) return 'warning'
+  return 'danger'
+}
+
+const getScoreColor = (score) => {
+  if (score >= 80) return '#67c23a'
+  if (score >= 60) return '#e6a23c'
+  return '#f56c6c'
+}
+
+const startRecommendation = () => {
+  recommending.value = true
+  progress.value = 0
+  progressStatus.value = ''
+
+  // 模拟进度条动画
+  const progressInterval = setInterval(() => {
+    if (progress.value < 90) {
+      progress.value += Math.random() * 15
+      if (progress.value > 90) progress.value = 90
+    }
+  }, 300)
+
+  setTimeout(() => {
+    clearInterval(progressInterval)
+    progress.value = 100
+    progressStatus.value = 'success'
+
+    const filterByStrategy = (list) => {
+      switch (strategy.value) {
+        case 'reach': return list.filter(s => s.match >= 80)
+        case 'safe': return list.filter(s => s.match <= 70)
+        default: return list.filter(s => s.match >= 70 && s.match < 85)
+      }
+    }
+    schools.value = filterByStrategy(mockSchools)
+    recommending.value = false
+    ElMessage.success(`为您推荐了 ${schools.value.length} 所学校`)
+  }, 2000)
+}
+
+const toggleSelect = (id) => {
+  const idx = selectedSchools.value.indexOf(id)
+  if (idx > -1) {
+    selectedSchools.value.splice(idx, 1)
+  } else {
+    selectedSchools.value.push(id)
+  }
+}
+
+const toggleFavorite = (id) => {
+  const idx = favorites.value.indexOf(id)
+  if (idx > -1) {
+    favorites.value.splice(idx, 1)
+    ElMessage.success('已取消收藏')
+  } else {
+    favorites.value.push(id)
+    ElMessage.success('已收藏')
+  }
+  localStorage.setItem('school_favorites', JSON.stringify(favorites.value))
+}
+
+const showDetail = (school) => {
+  currentSchool.value = school
+  detailVisible.value = true
+}
+
+const toggleCompare = () => {
+  compareSchools.value = mockSchools.filter(s => selectedSchools.value.includes(s.id))
+  compareVisible.value = true
+}
+
+const compareSchools = ref([])
+
+onMounted(() => {
+  const saved = localStorage.getItem('assessment_report')
+  if (saved) {
+    assessment.value = JSON.parse(saved)
+    if (assessment.value.basic) {
+      hasAssessment.value = true
+    }
+  }
+  const savedFavs = localStorage.getItem('school_favorites')
+  if (savedFavs) {
+    favorites.value = JSON.parse(savedFavs)
+  }
+})
+</script>
+
+<style scoped>
+.school-recommendation-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.summary-card, .control-card {
+  margin-bottom: 20px;
+}
+
+.summary-content {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.control-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.schools-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.school-card {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.school-card:hover {
+  transform: translateY(-4px);
+}
+
+.school-card.is-selected {
+  border-color: #667eea;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.school-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.school-name {
+  font-weight: bold;
+  font-size: 18px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.match-badge {
+  font-size: 12px;
+}
+
+.school-info p {
+  margin: 8px 0;
+  color: #606266;
+}
+
+.school-actions {
+  margin-top: 15px;
+  display: flex;
+  gap: 8px;
+}
+
+.school-detail .requirement-section {
+  margin-top: 20px;
+}
+
+.official-link {
+  margin-top: 15px;
+}
+</style>
