@@ -186,34 +186,11 @@ Notes:
 - 所有mock数据学校：Harvard(95)、Stanford(88)、MIT(92)、Oxford(85)、Cambridge(82)、Tsinghua(75)
 - Next: Continue with F010 (选校列表筛选与排序) or remaining features.
 
-=== Session 14 — F014 Implementation ===
-Date: 2026-03-24
-Feature worked on: F014 (任务提醒与到期预警)
-Status: completed
-Git commit: 041fe6a
-Remaining features: 19
-Notes:
-- 在Timeline.vue中实现了完整的任务提醒与到期预警功能：
-  * 添加3天内到期任务的黄色高亮样式（.is-soon类）
-  * 增强逾期任务的红色高亮显示（.is-overdue类），边框和文字颜色变化
-  * 实现任务提醒功能：支持启用提醒、提前1/3/7天设置，数据保存到任务对象
-  * 集成浏览器Notification API，自动请求通知权限并发送提醒
-  * 添加「查看即将到期(7天)」按钮，一键筛选7天内到期的任务
-  * 任务卡片显示多种状态标签：已逾期、即将到期、紧急、提醒已开
-  * 更新任务表单（添加/编辑对话框）包含reminderEnabled和reminderDays字段
-- 端到端测试验证（通过Playwright MCP）：
-  1. 验证看板视图正常显示三列布局（待处理、进行中、已完成）
-  2. 「查看即将到期」按钮显示并能正常切换筛选状态
-  3. 任务提醒设置UI正常：复选框启用后显示「提前提醒」选择框
-  4. 任务卡片标签系统工作正常（提醒已开等标签显示）
-  5. 通过手动添加类验证了高亮样式逻辑正确
-- Next: Continue with F015 (文书助手主界面) or remaining features.
-
 === Session 15 — F015 Implementation ===
 Date: 2026-03-24
 Feature worked on: F015 (文书助手主界面)
 Status: completed
-Git commit: [pending]
+Git commit: a67387c
 Remaining features: 18
 Notes:
 - 实现了完整的文书助手主界面功能：
@@ -236,3 +213,81 @@ Notes:
   5. ✅ 编辑器标题显示"个人陈述 | 标准个人陈述模板"
 - All F015 test steps passed
 - Next: Continue with F016 (AI文书生成功能) or remaining features.
+
+=== Session 16 — F017 Implementation ===
+Date: 2026-03-24
+Feature worked on: F017 (文书编辑与格式调整)
+Status: completed
+Git commit: a37b06a
+Remaining features: 16
+Notes:
+- 实现了完整的富文本编辑功能：
+  * 将textarea替换为contenteditable div，支持实时编辑
+  * 富文本格式工具栏：B加粗、I斜体、U下划线、H1/H2/H3标题、☰无序列表、1.有序列表、↶撤销、↷重做
+  * formatDoc函数使用document.execCommand支持光标位置格式化操作
+  * 字数统计弹框：详细显示总字符数、中文字符、英文字母、数字、标点、空格、换行符、预计阅读时间
+  * PDF导出：预览对话框显示格式化内容 + jsPDF生成带标题、分隔线、页脚的PDF文件下载
+  * 版本保存对话框：输入备注后保存，localStorage持久化
+  * 历史版本管理：显示时间戳和备注，支持预览和恢复
+  * 编辑内容自动保存到localStorage
+- 通过Playwright MCP完成端到端测试：
+  1. ✅ 导航到材料中心，显示4种文书类型卡片
+  2. ✅ 点击个人陈述进入模板选择，显示6条核心要点提示
+  3. ✅ 选择标准个人陈述模板，编辑器加载140字模板内容
+  4. ✅ 工具栏格式按钮正确显示（B、I、U、H1、H2、H3、☰、1.、↶、↷）
+  5. ✅ 点击"字数统计"按钮，弹框显示9项详细统计数据（总字符159、中文117、标点23、换行19等）
+  6. ✅ 点击"导出PDF"按钮，显示PDF预览对话框（标题、内容、关闭/下载按钮）
+  7. ✅ 选中编辑器内容，点击B加粗按钮，HTML验证<p><b>个人陈述</b></p>正确包裹
+  8. ✅ 点击"保存版本"按钮，显示备注输入对话框（字数限制4/50），保存后显示成功提示
+  9. ✅ 点击"历史版本"按钮，显示版本列表（2026/3/24初稿完成 + 两个预设版本），每个版本有预览/恢复按钮
+- 所有F017测试步骤通过
+- Next: Continue with F018 (文书历史版本管理) or remaining features.
+
+=== Session 17 — F019+F020 Implementation ===
+Date: 2026-03-24
+Feature worked on: F019 (申请材料清单) + F020 (材料状态跟踪与导出)
+Status: completed
+Git commit: 15cca4b
+Remaining features: 14
+Notes:
+- F019增强：新增编辑材料对话框（editItemDialog），修复updateProgress/removeItem/confirmAddItem的localStorage持久化，添加所属分类选择到自定义添加对话框
+- F020增强：新增详细检查报告对话框(reportVisible)，包含完成率/已完成数量/待完成数量统计，待完成列表含分类+备注+快速完成按钮，已完成以标签云展示，重置添加确认对话框(ElMessageBox.confirm)
+- 通过Playwright MCP端到端验证所有F019/F020测试步骤：
+  1. ✅ 材料清单页面显示必需/推荐/可选三类分类
+  2. ✅ 勾选checkbox，进度条从0%→7%实时更新
+  3. ✅ 添加自定义材料（作品集+推荐材料+备注），成功添加并显示
+  4. ✅ 编辑材料弹出对话框，预填名称和备注，保存后显示"材料已更新"
+  5. ✅ 生成检查报告显示：汇总统计、14项待完成列表（含分类备注）、1项已完成（本科成绩单）标签
+  6. ✅ 重置按钮弹出确认对话框，取消后不执行
+  7. ✅ 导出清单下载CSV文件（材料清单_2026-3-24.csv），显示"CSV已导出"成功提示
+- 所有状态变更持久化到localStorage(materials_checklist key)
+- Next: Continue with F021 (院校数据库搜索) or remaining features.
+
+=== Session 18 — F030 Implementation ===
+Date: 2026-03-24
+Feature worked on: F030 (首页Hero区域与CTA增强)
+Status: completed
+Git commit: 4a26af1
+Remaining features: 14
+Notes:
+- 全面重写Home.vue，大幅增强视觉效果和交互体验：
+  * Hero区域：渐变背景(#667eea→#764ba2)、6个动态浮动粒子动画、渐变叠加层呼吸动画
+  * 标题shimmer光泽动画（background-size 200%渐变）、打字机效果副标题
+  * 双CTA按钮：主按钮(开始规划→/assessment) + 次按钮(探索院校→/university-database)
+  * Hero统计数据：32+功能模块、1000+院校数据、AI智能辅助
+  * 滚动提示动画（鼠标图标+向下滚动文字+bounce动画）
+  * 视差滚动效果：Hero随页面滚动淡出(opacity)和位移(parallax)
+  * 滚动进入动画：features/highlights/CTA三区域滚动到视口80%时淡入
+  * 功能卡片悬浮提升(translateY -10px)、阴影加深、图标缩放1.1倍
+  * 功能卡片点击跳转对应页面（使用window.$router.push）
+  * 新增底部CTA区域：渐变背景+立即开始按钮
+  * 浮动返回顶部按钮（滚动>400px显示，平滑滚动）
+  * 完整响应式设计适配移动端
+- 端到端测试验证（Playwright MCP）：
+  1. ✅ 访问首页，Hero区域显示完整标题、副标题、统计数据、滚动提示
+  2. ✅ 点击「开始规划」→ 跳转/assessment（背景评估页）
+  3. ✅ 功能卡片点击（院校数据库）→ 跳转/university-database成功
+  4. ✅ 滚动到页面底部，Hero淡出，核心功能卡片、why us区域、CTA区域均正确显示
+  5. ✅ 底部「立即开始」按钮 → 跳转/assessment成功
+- 所有F030测试步骤通过
+- Next: Continue with F031 (核心功能展示卡片) or F032 (页面底部信息)
