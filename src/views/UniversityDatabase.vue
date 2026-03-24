@@ -35,6 +35,13 @@
     <div v-if="filteredSchools.length > 0" class="schools-grid">
       <el-card v-for="school in filteredSchools" :key="school.id" class="school-card"
         shadow="hover" @click="showDetail(school)">
+        <!-- 快速查看按钮（悬停显示） -->
+        <div class="quick-view-btn">
+          <el-button type="primary" size="small" round @click.stop="showDetail(school)">
+            快速查看
+          </el-button>
+        </div>
+
         <div class="card-header">
           <h3>{{ school.name }}</h3>
           <el-tag :type="school.rankType" size="small">{{ school.ranking }}</el-tag>
@@ -261,17 +268,57 @@ onMounted(() => {
 
 .schools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 20px;
+  /* 默认移动端优先：1列 */
+  grid-template-columns: 1fr;
+}
+
+/* 平板及以上：2列 */
+@media (min-width: 480px) {
+  .schools-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .schools-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* 大桌面端：4列 */
+@media (min-width: 1200px) {
+  .schools-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .school-card {
+  position: relative;
+  overflow: hidden;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .school-card:hover {
   transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 快速查看按钮 - 悬停显示 */
+.quick-view-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.school-card:hover .quick-view-btn {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .card-header {

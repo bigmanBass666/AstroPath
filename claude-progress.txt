@@ -357,3 +357,46 @@ Notes:
   4. ✅ 专业筛选：通过搜索框测试专业关键词过滤，成功筛选出匹配院校
   5. ✅ 重置按钮清除所有筛选条件，恢复显示全部9所学校
 - 下一步：继续实现F022（院校详情页展示）或序列中下一个未完成功能。
+
+=== Session 30 — F022 Implementation ===
+Date: 2026-03-24
+Feature worked on: F022 (院校详情页展示)
+Status: completed
+Git commit: c32e363
+Remaining features: 9
+Notes:
+- 修复localStorage key不一致问题：UniversityDatabase.vue从'shortlisted_schools'改为'school_favorites'，与SchoolRecommendation.vue保持一致
+- 增强院校卡片和详情页的收藏按钮：动态显示文本（"加入选校清单"/"已在清单中"）
+- 详情页功能验证（端到端Playwright测试）：
+  1. ✅ 导航到院校数据库页面，验证搜索、筛选面板完整显示
+  2. ✅ 搜索功能：输入"Harvard"实时过滤，显示1所学校
+  3. ✅ 详情对话框：点击"查看详情"显示完整信息（简介、排名、学费、申请要求、官网链接）
+  4. ✅ 加入选校清单：点击后按钮状态更新为"已在清单中"，保存到localStorage
+  5. ✅ 持久化验证：刷新页面后收藏状态保留
+  6. ✅ 官网链接按钮存在（新标签页打开功能在沙箱环境受限）
+- 所有F022测试步骤全部通过
+- Next: Continue with F023 (院校卡片网格布局响应式) or remaining features.
+
+=== Session 31 — 2026-03-24 ===
+Feature worked on: F023 (院校卡片网格布局)
+Status: completed
+Git commit: 11a575e
+Remaining features: 8
+Notes:
+- 完成响应式网格布局优化：
+  * 移动端优先：默认1列 → 480px: 2列 → 768px: 3列 → 1200px: 4列
+  * 使用精确断点替代 auto-fill，确保每行列数可控
+- 添加"快速查看"按钮悬停效果：
+  * 绝对定位右上角，默认透明度0、向上偏移
+  * 悬停时淡入显示并归位
+  * 点击触发详情弹窗（showDetail）
+- 卡片悬停增强：阴影加深（rgba(0,0,0,0.15) 0 8px 24px）+ 上移4px
+- 端到端测试验证（Playwright MCP）：
+  ✅ 1280px: 网格正确显示4列
+  ✅ 768px: 切换为3列
+  ✅ 480px: 切换为2列
+  ✅ 375px: 切换为1列
+  ✅ 悬停时卡片抬升、阴影显示，快速查看按钮淡入
+  ✅ 点击快速查看按钮弹出详情对话框
+- 剩余待实现：F024、F025-F029、F032、F033（共8个）
+- Next: 继续实现F024（专业搜索与对比）或下一未完成功能
