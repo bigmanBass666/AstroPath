@@ -49,16 +49,13 @@
               <div class="message-text" v-html="renderMessage(msg.content)"></div>
             </div>
           </div>
-          <div v-if="isGenerating" class="message is-assistant">
+          <div v-if="isGenerating && messages[messages.length - 1]?.role === 'assistant'" class="message is-assistant">
             <div class="message-avatar">
               <el-icon><ChatLineRound /></el-icon>
             </div>
             <div class="message-content">
-              <div class="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
+              <div class="message-text" v-html="renderMessage(streamingContent || '')"></div>
+              <span class="cursor-blink">|</span>
             </div>
           </div>
         </div>
@@ -77,8 +74,11 @@
             <el-select v-model="selectedProvider" placeholder="选择AI提供商" style="width: 150px;">
               <el-option v-for="p in providers" :key="p.id" :label="p.name" :value="p.id" />
             </el-select>
-            <el-button type="primary" @click="sendMessage" :loading="isGenerating">
+            <el-button type="primary" @click="sendMessage" :loading="isGenerating" v-if="!isGenerating">
               发送
+            </el-button>
+            <el-button type="danger" @click="stopGeneration" v-else>
+              停止生成
             </el-button>
             <el-button @click="clearChat" :disabled="isGenerating">清空对话</el-button>
           </div>
@@ -124,6 +124,7 @@ const currentAgent = computed(() => agents.value.find(a => a.id === currentAgent
 const selectedProvider = ref(null)
 const inputMessage = ref('')
 const isGenerating = ref(false)
+const streamingContent = ref('') // 流式响应内容
 const messagesContainer = ref(null)
 const messages = ref([])
 const historyVisible = ref(false)
@@ -174,6 +175,7 @@ const sendMessage = async () => {
   inputMessage.value = ''
 
   isGenerating.value = true
+  streamingContent.value = ''
   await nextTick(() => scrollToBottom())
 
   try {
@@ -185,18 +187,34 @@ const sendMessage = async () => {
         .map(m => ({ role: m.role, content: m.content }))
     ]
 
-    const response = await sendMessageToAI(selectedProvider.value, apiMessages, {
-      temperature: 0.7,
-      maxTokens: 1000
-    })
-
+    // 创建临时的AI消息用于流式更新
+    const aiMsgId = Date.now() + 1
     const aiMsg = {
-      id: Date.now() + 1,
+      id: aiMsgId,
       role: 'assistant',
-      content: response.content || '抱歉，我无法回答这个问题。',
+      content: '',
       timestamp: new Date().getTime()
     }
     messages.value.push(aiMsg)
+
+    // 使用流式响应
+    const stream = await sendMessageToAI(selectedProvider.value, apiMessages, {
+      temperature: 0.7,
+      maxTokens: 1000,
+      stream: true
+    })
+
+    // 逐字接收流式内容
+    for await (const chunk of stream) {
+      if (!isGenerating.value) break // 用户点击停止
+      if (chunk.type === 'content') {
+        streamingContent.value += chunk.content
+        aiMsg.content = streamingContent.value
+        await nextTick(() => scrollToBottom())
+      }
+    }
+
+    streamingContent.value = ''
   } catch (error) {
     ElMessage.error(`请求失败: ${error.message}`)
     // 添加错误消息
@@ -209,6 +227,7 @@ const sendMessage = async () => {
     messages.value.push(errorMsg)
   } finally {
     isGenerating.value = false
+    streamingContent.value = ''
     await nextTick(() => scrollToBottom())
   }
 }
@@ -236,7 +255,14 @@ const scrollToBottom = () => {
 const clearChat = () => {
   if (confirm('确定清空当前对话？')) {
     messages.value = []
+    streamingContent.value = ''
   }
+}
+
+// 停止生成
+const stopGeneration = () => {
+  isGenerating.value = false
+  streamingContent.value = ''
 }
 
 const saveConversation = () => {
@@ -491,6 +517,18 @@ onMounted(() => {
 .message-text {
   line-height: 1.6;
   font-size: 14px;
+}
+
+.message-text .cursor-blink {
+  display: inline-block;
+  animation: blink 1s infinite;
+  color: #667eea;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 .message-text :deep(pre) {
