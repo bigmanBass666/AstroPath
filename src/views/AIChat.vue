@@ -81,6 +81,8 @@
               停止生成
             </el-button>
             <el-button @click="clearChat" :disabled="isGenerating">清空对话</el-button>
+            <el-button @click="openHistory" :disabled="isGenerating">查看历史</el-button>
+            <el-button @click="exportConversation" :disabled="messages.length === 0">导出对话</el-button>
           </div>
         </div>
       </div>
@@ -89,12 +91,18 @@
     <!-- 历史对话侧边栏 -->
     <el-drawer v-model="historyVisible" title="历史对话" size="400px">
       <div class="history-list">
-        <div v-for="(conv, idx) in conversations" :key="idx"
-          class="history-item"
-          @click="loadConversation(conv)">
-          <div class="history-title">{{ conv.title || '新对话' }}</div>
-          <div class="history-time">{{ formatTime(conv.createdAt) }}</div>
-          <el-button size="small" type="danger" text @click.stop="deleteConversation(idx)">删除</el-button>
+        <div v-for="(group, date) in groupedConversations" :key="date" class="history-group">
+          <div class="history-date">{{ date }}</div>
+          <div v-for="(conv, idx) in group" :key="conv.createdAt"
+            class="history-item"
+            @click="loadConversation(conv)">
+            <div class="history-title">{{ conv.title || '新对话' }}</div>
+            <div class="history-time">{{ formatTime(conv.createdAt) }}</div>
+            <el-button size="small" type="danger" text @click.stop="deleteConversation(conv.createdAt)">删除</el-button>
+          </div>
+        </div>
+        <div v-if="conversations.length === 0" class="empty-history">
+          暂无历史对话记录
         </div>
       </div>
     </el-drawer>
@@ -129,6 +137,24 @@ const messagesContainer = ref(null)
 const messages = ref([])
 const historyVisible = ref(false)
 const conversations = ref([])
+const currentConversationId = ref(null) // 当前会话ID
+
+// 按日期分组的历史会话
+const groupedConversations = computed(() => {
+  const groups = {}
+  conversations.value.forEach(conv => {
+    const date = new Date(conv.createdAt).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+    if (!groups[date]) {
+      groups[date] = []
+    }
+    groups[date].push(conv)
+  })
+  return groups
+})
 
 // 加载保存的提供商
 const providers = computed(() => {
@@ -259,6 +285,45 @@ const clearChat = () => {
   }
 }
 
+const openHistory = () => {
+  historyVisible.value = true
+}
+
+// 导出对话功能
+const exportConversation = () => {
+  if (messages.value.length === 0) {
+    ElMessage.warning('当前对话为空，无法导出')
+    return
+  }
+
+  // 生成文本内容
+  const agentName = currentAgent.value?.name || 'AI对话'
+  const dateStr = new Date().toLocaleString('zh-CN')
+  let textContent = `=== ${agentName} 对话记录 ===\n`
+  textContent += `导出时间: ${dateStr}\n`
+  textContent += `对话轮次: ${messages.value.length} 条消息\n`
+  textContent += '='.repeat(50) + '\n\n'
+
+  messages.value.forEach(msg => {
+    const time = formatTime(msg.timestamp)
+    const role = msg.role === 'user' ? '您' : agentName
+    textContent += `[${time}] ${role}:\n${msg.content}\n\n`
+  })
+
+  // 创建文本文件下载
+  const blob = new Blob(['\ufeff' + textContent], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `对话记录_${agentName}_${new Date().toISOString().slice(0,10)}.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  ElMessage.success('对话记录已导出为文本文件')
+}
+
 // 停止生成
 const stopGeneration = () => {
   isGenerating.value = false
@@ -267,28 +332,62 @@ const stopGeneration = () => {
 
 const saveConversation = () => {
   if (messages.value.length > 0) {
-    const conv = {
-      title: messages.value[0].content.substring(0, 30) + '...',
-      createdAt: Date.now(),
-      agentId: currentAgentId.value,
-      messages: [...messages.value]
+    // 检查是否已有相同会话（基于最新的消息ID）
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg) {
+      // 更新现有会话或创建新会话
+      const existingIdx = conversations.value.findIndex(c => c.id === currentConversationId.value)
+      const conv = {
+        id: currentConversationId.value || Date.now(),
+        title: messages.value[0].content.substring(0, 30) + '...',
+        createdAt: currentConversationId.value ? getConversationById(currentConversationId.value)?.createdAt || Date.now() : Date.now(),
+        agentId: currentAgentId.value,
+        messages: JSON.parse(JSON.stringify(messages.value)) // 深拷贝
+      }
+
+      if (existingIdx >= 0) {
+        conversations.value[existingIdx] = conv
+      } else {
+        conversations.value.unshift(conv)
+      }
+
+      localStorage.setItem('conversations', JSON.stringify(conversations.value))
     }
-    conversations.value.unshift(conv)
-    localStorage.setItem('conversations', JSON.stringify(conversations.value))
   }
+}
+
+const getConversationById = (id) => {
+  return conversations.value.find(c => c.id === id)
 }
 
 const loadConversation = (conv) => {
   messages.value = conv.messages || []
   currentAgentId.value = conv.agentId || 'consultant'
+  currentConversationId.value = conv.id || null
   historyVisible.value = false
 }
 
-const deleteConversation = (index) => {
+const deleteConversation = (convId) => {
   if (confirm('删除此对话记录？')) {
-    conversations.value.splice(index, 1)
+    conversations.value = conversations.value.filter(c => c.id !== convId)
     localStorage.setItem('conversations', JSON.stringify(conversations.value))
+    // 如果删除的是当前会话，清空当前对话
+    if (currentConversationId.value === convId) {
+      messages.value = []
+      currentConversationId.value = null
+    }
   }
+}
+
+// 自动保存对话（防抖）
+let saveTimeout = null
+const autoSaveConversation = () => {
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(() => {
+    if (messages.value.length > 0) {
+      saveConversation()
+    }
+  }, 2000) // 2秒后自动保存
 }
 
 onMounted(() => {
@@ -296,10 +395,19 @@ onMounted(() => {
   const saved = localStorage.getItem('conversations')
   if (saved) {
     conversations.value = JSON.parse(saved)
+    // 恢复时给每个会话添加id（兼容旧数据）
+    conversations.value.forEach((conv, idx) => {
+      if (!conv.id) {
+        conv.id = Date.now() + idx
+      }
+    })
   }
-  // 保存对话的watch
+
+  // 监听消息变化，自动保存会话
   watch(messages, () => {
-    // 定期自动保存（实际实现可以更精细）
+    if (messages.value.length > 0) {
+      autoSaveConversation()
+    }
   }, { deep: true })
 })
 </script>
@@ -578,16 +686,33 @@ onMounted(() => {
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
+}
+
+.history-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.history-date {
+  font-size: 12px;
+  font-weight: bold;
+  color: #909399;
+  padding: 8px 12px 4px;
+  background: #f5f7fa;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .history-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   background: #f5f7fa;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -606,5 +731,12 @@ onMounted(() => {
 .history-time {
   font-size: 12px;
   color: #909399;
+}
+
+.empty-history {
+  text-align: center;
+  padding: 40px 20px;
+  color: #909399;
+  font-size: 14px;
 }
 </style>
