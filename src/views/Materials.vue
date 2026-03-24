@@ -92,15 +92,34 @@
             <el-select v-model="selectedProvider" placeholder="选择AI提供商" style="width: 150px;">
               <el-option v-for="p in providers" :key="p.id" :label="p.name" :value="p.id" />
             </el-select>
-            <el-button-group>
-              <el-button size="small" @click="formatDoc('bold')">加粗</el-button>
-              <el-button size="small" @click="formatDoc('italic')">斜体</el-button>
-              <el-button size="small" @click="formatDoc('h2')">标题</el-button>
-              <el-button size="small" @click="formatDoc('list')">列表</el-button>
+            <el-button-group class="format-group">
+              <el-button size="small" @click="formatDoc('bold')" title="加粗">
+                <strong>B</strong>
+              </el-button>
+              <el-button size="small" @click="formatDoc('italic')" title="斜体">
+                <em>I</em>
+              </el-button>
+              <el-button size="small" @click="formatDoc('underline')" title="下划线">
+                <u>U</u>
+              </el-button>
             </el-button-group>
-            <el-button size="small" type="primary" @click="saveVersion">保存版本</el-button>
+            <el-button-group class="format-group">
+              <el-button size="small" @click="formatDoc('h1')" title="一级标题">H1</el-button>
+              <el-button size="small" @click="formatDoc('h2')" title="二级标题">H2</el-button>
+              <el-button size="small" @click="formatDoc('h3')" title="三级标题">H3</el-button>
+            </el-button-group>
+            <el-button-group class="format-group">
+              <el-button size="small" @click="formatDoc('ul')" title="无序列表">☰</el-button>
+              <el-button size="small" @click="formatDoc('ol')" title="有序列表">1.</el-button>
+            </el-button-group>
+            <el-button-group class="format-group">
+              <el-button size="small" @click="formatDoc('undo')" title="撤销">↶</el-button>
+              <el-button size="small" @click="formatDoc('redo')" title="重做">↷</el-button>
+            </el-button-group>
+            <el-button size="small" @click="showWordCountDialog">字数统计</el-button>
+            <el-button size="small" type="primary" @click="showVersionNoteDialog">保存版本</el-button>
             <el-button size="small" @click="showVersions">历史版本</el-button>
-            <el-button size="small" type="success" @click="exportPDF">导出PDF</el-button>
+            <el-button size="small" type="success" @click="previewAndExportPDF">导出PDF</el-button>
           </div>
 
           <!-- AI辅助区域 -->
@@ -125,10 +144,18 @@
           </div>
 
           <div class="editor-content">
-            <textarea v-model="essayContent" placeholder="在此编辑文书内容，可以使用AI生成辅助..."></textarea>
+            <div
+              ref="editorRef"
+              class="rich-editor"
+              contenteditable="true"
+              @input="onEditorInput"
+              @keydown="onEditorKeydown"
+              :data-placeholder="'在此编辑文书内容，可以使用AI生成辅助...'"
+            ></div>
           </div>
           <div class="word-count">
-            字数统计: {{ essayContent.length }} | 预计阅读时间: {{ Math.ceil(essayContent.length / 400) }}分钟
+            <span>字数统计: {{ wordCount }} 字 | 预计阅读时间: {{ Math.ceil(wordCount / 400) }}分钟</span>
+            <el-button size="small" type="text" @click="showWordCountDialog">详细统计</el-button>
           </div>
         </div>
       </el-tab-pane>
@@ -208,14 +235,86 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 版本备注对话框 -->
+    <el-dialog v-model="versionNoteVisible" title="保存版本" width="400px">
+      <el-form :model="versionNote" label-width="80px">
+        <el-form-item label="版本备注">
+          <el-input
+            v-model="versionNote.text"
+            placeholder="请输入版本备注，如：初稿、修改版、终稿..."
+            maxlength="50"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="versionNoteVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmSaveVersion">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 字数统计对话框 -->
+    <el-dialog v-model="wordCountVisible" title="字数统计详情" width="500px">
+      <div class="word-count-detail">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="总字符数">
+            {{ essayContent.length }} 个字符
+          </el-descriptions-item>
+          <el-descriptions-item label="中文字符">
+            {{ charStats.zh }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="英文字母">
+            {{ charStats.en }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="数字">
+            {{ charStats.digits }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="标点符号">
+            {{ charStats.punct }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="空格">
+            {{ charStats.space }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="换行符">
+            {{ charStats.newline }} 个
+          </el-descriptions-item>
+          <el-descriptions-item label="估计词数（英文）">
+            {{ charStats.en }} 词
+          </el-descriptions-item>
+          <el-descriptions-item label="预计阅读时间">
+            {{ Math.ceil(wordCount / 400) }} 分钟
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+    </el-dialog>
+
+    <!-- PDF预览对话框 -->
+    <el-dialog v-model="pdfPreviewVisible" title="PDF预览" width="700px" fullscreen>
+      <div class="pdf-preview-wrapper" ref="pdfPreviewRef">
+        <div class="pdf-document">
+          <div class="pdf-header">
+            <h1>{{ getEssayTypeLabel(selectedEssayType) }}</h1>
+            <p class="pdf-template-info">{{ selectedTemplate?.name }}</p>
+          </div>
+          <div class="pdf-body" v-html="renderedContent"></div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="pdfPreviewVisible = false">关闭预览</el-button>
+        <el-button type="primary" @click="downloadPDF">下载PDF</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getProviders, sendMessageToAI } from '@/utils/ai-api'
+import { jsPDF } from 'jspdf'
+import 'jspdf/dist/jspdf.umd.min.js'
 
 const activeTab = ref('essay')
 const currentEssayType = ref('ps')
@@ -226,6 +325,13 @@ const activeCategory = ref(['required'])
 const selectedProvider = ref(null)
 const aiPrompt = ref('')
 const isGenerating = ref(false)
+const editorRef = ref(null)
+const versionNoteVisible = ref(false)
+const wordCountVisible = ref(false)
+const pdfPreviewVisible = ref(false)
+const pdfPreviewRef = ref(null)
+const versionNote = reactive({ text: '' })
+const renderedContent = ref('')
 
 // 新增：文书类型选择状态
 const selectedEssayType = ref(null)
@@ -500,7 +606,136 @@ onMounted(() => {
       selectedProvider.value = parsed[0].id
     }
   }
+  // 从localStorage恢复编辑器内容
+  const savedContent = localStorage.getItem('essay_current_content')
+  if (savedContent && editorRef.value) {
+    editorRef.value.innerHTML = savedContent
+  }
+  // 从localStorage恢复历史版本
+  const savedEssays = localStorage.getItem('essay_versions')
+  if (savedEssays) {
+    versions.value = JSON.parse(savedEssays)
+  }
+  const savedChecklist = localStorage.getItem('materials_checklist')
+  if (savedChecklist) {
+    Object.assign(allItems.value, JSON.parse(savedChecklist))
+  }
 })
+
+// 字数统计计算
+const wordCount = computed(() => {
+  return essayContent.value.replace(/\s/g, '').length
+})
+
+// 字符详细统计
+const charStats = computed(() => {
+  const text = essayContent.value
+  const zh = (text.match(/[\u4e00-\u9fff]/g) || []).length
+  const en = (text.match(/[a-zA-Z]/g) || []).length
+  const digits = (text.match(/[0-9]/g) || []).length
+  const punct = (text.match(/[^\u4e00-\u9fff a-zA-Z0-9\n\r]/g) || []).length
+  const space = (text.match(/[ ]/g) || []).length
+  const newline = (text.match(/\n/g) || []).length
+  return { zh, en, digits, punct, space, newline }
+})
+
+// 编辑器内容变化处理
+const onEditorInput = () => {
+  if (editorRef.value) {
+    essayContent.value = editorRef.value.innerText || ''
+    // 自动保存到localStorage
+    localStorage.setItem('essay_current_content', editorRef.value.innerHTML)
+  }
+}
+
+// 编辑器按键处理
+const onEditorKeydown = (e) => {
+  // Tab键插入缩进
+  if (e.key === 'Tab') {
+    e.preventDefault()
+    document.execCommand('insertText', false, '    ')
+  }
+}
+
+// 格式化文档（支持富文本选区操作）
+const formatDoc = (format) => {
+  const selection = window.getSelection()
+  if (!selection.rangeCount) return
+
+  switch (format) {
+    case 'bold':
+      document.execCommand('bold', false)
+      break
+    case 'italic':
+      document.execCommand('italic', false)
+      break
+    case 'underline':
+      document.execCommand('underline', false)
+      break
+    case 'h1':
+      document.execCommand('formatBlock', false, '<h1>')
+      break
+    case 'h2':
+      document.execCommand('formatBlock', false, '<h2>')
+      break
+    case 'h3':
+      document.execCommand('formatBlock', false, '<h3>')
+      break
+    case 'ul':
+      document.execCommand('insertUnorderedList', false)
+      break
+    case 'ol':
+      document.execCommand('insertOrderedList', false)
+      break
+    case 'undo':
+      document.execCommand('undo', false)
+      break
+    case 'redo':
+      document.execCommand('redo', false)
+      break
+  }
+
+  // 触发input事件更新内容
+  nextTick(() => {
+    if (editorRef.value) {
+      essayContent.value = editorRef.value.innerText || ''
+      localStorage.setItem('essay_current_content', editorRef.value.innerHTML)
+    }
+  })
+}
+
+// 显示字数统计对话框
+const showWordCountDialog = () => {
+  wordCountVisible.value = true
+}
+
+// 显示版本保存对话框
+const showVersionNoteDialog = () => {
+  versionNote.text = `版本 ${versions.value.length + 1}`
+  versionNoteVisible.value = true
+}
+
+// 确认保存版本
+const confirmSaveVersion = () => {
+  if (!essayContent.value.trim()) {
+    ElMessage.warning('文书内容为空，无法保存')
+    return
+  }
+  versions.value.unshift({
+    date: new Date().toLocaleString('zh-CN'),
+    note: versionNote.text || `版本 ${versions.value.length + 1}`,
+    content: essayContent.value
+  })
+  localStorage.setItem('essay_versions', JSON.stringify(versions.value))
+  ElMessage.success('版本已保存')
+  versionNoteVisible.value = false
+  versionNote.text = ''
+}
+
+// 旧版本保存方法（保持兼容）
+const saveVersion = () => {
+  showVersionNoteDialog()
+}
 
 // 获取文书类型标签
 const getEssayTypeLabel = (type) => {
@@ -525,6 +760,16 @@ const selectTemplate = (template) => {
   selectedTemplate.value = template
   // 加载模板内容到编辑器
   essayContent.value = template.content
+  // 设置富文本编辑器内容
+  nextTick(() => {
+    if (editorRef.value) {
+      editorRef.value.innerHTML = template.content.split('\n').map(line => {
+        if (line.trim()) return `<p>${line}</p>`
+        return '<p><br></p>'
+      }).join('')
+      localStorage.setItem('essay_current_content', editorRef.value.innerHTML)
+    }
+  })
 }
 
 // 返回模板选择
@@ -625,27 +870,6 @@ const removeItem = (categoryId, index) => {
   ElMessage.success('已删除')
 }
 
-const formatDoc = (format) => {
-  if (format === 'bold') {
-    essayContent.value = `**${essayContent.value}**`
-  } else if (format === 'italic') {
-    essayContent.value = `*${essayContent.value}*`
-  } else if (format === 'h2') {
-    essayContent.value = `## ${essayContent.value}`
-  } else if (format === 'list') {
-    essayContent.value = essayContent.value.split('\n').map(l => `- ${l}`).join('\n')
-  }
-}
-
-const saveVersion = () => {
-  versions.value.unshift({
-    date: new Date().toLocaleString('zh-CN'),
-    note: `版本 ${versions.value.length + 1}`,
-    content: essayContent.value
-  })
-  ElMessage.success('版本已保存')
-}
-
 // AI生成文书内容
 const generateWithAI = async () => {
   if (!selectedProvider.value) {
@@ -678,6 +902,16 @@ const generateWithAI = async () => {
 
     essayContent.value = response.content
     aiPrompt.value = ''
+    // 更新编辑器内容
+    nextTick(() => {
+      if (editorRef.value) {
+        editorRef.value.innerHTML = response.content.split('\n').map(line => {
+          if (line.trim()) return `<p>${line}</p>`
+          return '<p><br></p>'
+        }).join('')
+        localStorage.setItem('essay_current_content', editorRef.value.innerHTML)
+      }
+    })
     ElMessage.success('AI生成完成')
   } catch (error) {
     ElMessage.error(`生成失败: ${error.message}`)
@@ -702,22 +936,172 @@ const showVersions = () => {
 
 const previewVersion = (version) => {
   essayContent.value = version.content
+  nextTick(() => {
+    if (editorRef.value && version.content) {
+      editorRef.value.innerHTML = version.content.split('\n').map(line => {
+        if (line.trim()) return `<p>${line}</p>`
+        return '<p><br></p>'
+      }).join('')
+    }
+  })
   versionsVisible.value = false
-  ElMessage.success('已加载历史版本')
+  ElMessage.success('已加载历史版本预览')
 }
 
 const restoreVersion = (version) => {
   essayContent.value = version.content
+  nextTick(() => {
+    if (editorRef.value && version.content) {
+      editorRef.value.innerHTML = version.content.split('\n').map(line => {
+        if (line.trim()) return `<p>${line}</p>`
+        return '<p><br></p>'
+      }).join('')
+      localStorage.setItem('essay_current_content', editorRef.value.innerHTML)
+    }
+  })
   versionsVisible.value = false
   ElMessage.success('已恢复到此版本')
 }
 
+// PDF预览和导出
+const previewAndExportPDF = () => {
+  if (!essayContent.value.trim()) {
+    ElMessage.warning('文书内容为空，无法导出')
+    return
+  }
+  // 将文本内容转换为HTML格式用于预览
+  renderedContent.value = essayContent.value.split('\n').map(line => {
+    if (line.trim()) {
+      // 处理标题格式（## 开头的行）
+      if (line.startsWith('## ')) {
+        return `<h2>${line.substring(3)}</h2>`
+      }
+      if (line.startsWith('# ')) {
+        return `<h1>${line.substring(2)}</h1>`
+      }
+      // 处理列表（- 开头的行）
+      if (line.trim().startsWith('- ')) {
+        return `<li>${line.trim().substring(2)}</li>`
+      }
+      // 处理加粗 *文字*
+      const processed = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      return `<p>${processed}</p>`
+    }
+    return '<p><br></p>'
+  }).join('')
+  pdfPreviewVisible.value = true
+}
+
+const downloadPDF = () => {
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 20
+  const maxWidth = pageWidth - 2 * margin
+  let y = margin
+
+  // 添加标题
+  doc.setFontSize(18)
+  doc.setFont('helvetica', 'bold')
+  const title = getEssayTypeLabel(selectedEssayType.value)
+  doc.text(title, pageWidth / 2, y, { align: 'center' })
+  y += 10
+
+  // 添加模板信息
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(selectedTemplate.value?.name || '', pageWidth / 2, y, { align: 'center' })
+  y += 10
+
+  // 添加分隔线
+  doc.setDrawColor(200, 200, 200)
+  doc.line(margin, y, pageWidth - margin, y)
+  y += 10
+
+  // 添加正文内容
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'normal')
+
+  const lines = essayContent.value.split('\n')
+  for (const line of lines) {
+    if (!line.trim()) {
+      y += 5 // 空行
+      continue
+    }
+
+    // 处理标题
+    let text = line.trim()
+    let fontSize = 11
+    let isBold = false
+
+    if (line.startsWith('## ')) {
+      text = line.substring(3).trim()
+      fontSize = 14
+      isBold = true
+    } else if (line.startsWith('# ')) {
+      text = line.substring(2).trim()
+      fontSize = 16
+      isBold = true
+    } else if (line.trim().startsWith('- ')) {
+      text = '• ' + line.trim().substring(2)
+    }
+
+    doc.setFontSize(fontSize)
+    doc.setFont('helvetica', isBold ? 'bold' : 'normal')
+
+    // 换行处理
+    const splitText = doc.splitTextToSize(text, maxWidth)
+    for (const part of splitText) {
+      if (y + 6 > pageHeight - margin) {
+        doc.addPage()
+        y = margin
+      }
+      doc.text(part, margin, y)
+      y += fontSize * 0.5 + 2
+    }
+    y += 2
+  }
+
+  // 添加页脚
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(150, 150, 150)
+    doc.text(`第 ${i} / ${totalPages} 页`, pageWidth / 2, pageHeight - 10, { align: 'center' })
+    doc.text('智能留学规划平台 - 文书导出', margin, pageHeight - 10)
+  }
+
+  const fileName = `${getEssayTypeLabel(selectedEssayType.value)}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+  doc.save(fileName)
+  ElMessage.success(`PDF已下载: ${fileName}`)
+}
+
 const exportPDF = () => {
-  ElMessage.info('导出PDF功能（需要后端支持或jsPDF库）')
+  previewAndExportPDF()
 }
 
 const exportCSV = () => {
-  ElMessage.info('导出CSV功能')
+  const rows = []
+  rows.push(['材料名称', '类别', '状态', '备注'])
+  for (const [cat, catName] of [['required', '必需材料'], ['recommended', '推荐材料'], ['optional', '可选材料']]) {
+    for (const item of allItems.value[cat]) {
+      rows.push([item.name, catName, item.completed ? '已完成' : '未完成', item.note])
+    }
+  }
+
+  const csvContent = rows.map(r => r.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n')
+  const BOM = '\uFEFF'
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `材料清单_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('CSV已导出')
 }
 
 const generateReport = () => {
@@ -755,16 +1139,100 @@ onMounted(() => {
 
 .editor-toolbar {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 15px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.format-group {
+  display: flex;
+  gap: 2px;
+}
+
+.word-count {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #909399;
+  font-size: 13px;
+  margin-top: 8px;
 }
 
 .editor-content {
   border: 1px solid #dcdfe6;
   border-radius: 8px;
   min-height: 400px;
+}
+
+.rich-editor {
+  width: 100%;
+  min-height: 400px;
+  padding: 15px;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #303133;
+  background: white;
+  border-radius: 8px;
+}
+
+.rich-editor:focus {
+  outline: none;
+}
+
+.rich-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #c0c4cc;
+  pointer-events: none;
+}
+
+.rich-editor h1 {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 12px 0 8px 0;
+  color: #303133;
+  border-bottom: 2px solid #409eff;
+  padding-bottom: 6px;
+}
+
+.rich-editor h2 {
+  font-size: 17px;
+  font-weight: bold;
+  margin: 10px 0 6px 0;
+  color: #303133;
+}
+
+.rich-editor h3 {
+  font-size: 15px;
+  font-weight: bold;
+  margin: 8px 0 4px 0;
+  color: #606266;
+}
+
+.rich-editor p {
+  margin: 4px 0;
+  text-indent: 2em;
+}
+
+.rich-editor ul, .rich-editor ol {
+  margin: 6px 0;
+  padding-left: 30px;
+}
+
+.rich-editor li {
+  margin: 3px 0;
+}
+
+.rich-editor strong {
+  font-weight: bold;
+  color: #409eff;
+}
+
+.rich-editor em {
+  font-style: italic;
 }
 
 .editor-content textarea {
@@ -810,6 +1278,76 @@ onMounted(() => {
   width: 100%;
   margin-top: 15px;
   border-style: dashed !important;
+}
+
+/* PDF预览样式 */
+.pdf-preview-wrapper {
+  background: #f5f5f5;
+  padding: 20px;
+  min-height: 500px;
+  display: flex;
+  justify-content: center;
+}
+
+.pdf-document {
+  background: white;
+  width: 100%;
+  max-width: 700px;
+  padding: 40px 50px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-height: 600px;
+}
+
+.pdf-header h1 {
+  text-align: center;
+  font-size: 24px;
+  color: #303133;
+  margin-bottom: 8px;
+}
+
+.pdf-template-info {
+  text-align: center;
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 20px;
+}
+
+.pdf-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #303133;
+}
+
+.pdf-body h1 {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 16px 0 8px 0;
+  color: #303133;
+}
+
+.pdf-body h2 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 14px 0 6px 0;
+}
+
+.pdf-body p {
+  margin: 6px 0;
+  text-indent: 2em;
+}
+
+.pdf-body ul, .pdf-body ol {
+  padding-left: 30px;
+  margin: 8px 0;
+}
+
+/* 字数统计对话框 */
+.word-count-detail {
+  padding: 10px 0;
+}
+
+.word-count-detail .el-descriptions {
+  margin-top: 10px;
 }
 
 /* AI助手样式 */
