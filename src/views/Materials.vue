@@ -206,14 +206,84 @@
       </el-tab-pane>
     </el-tabs>
 
+    <!-- 编辑材料对话框 -->
+    <el-dialog v-model="editItemDialogVisible" title="编辑材料" width="400px">
+      <el-form :model="editingItem" label-width="80px">
+        <el-form-item label="材料名称">
+          <el-input v-model="editingItem.name" placeholder="材料名称" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="editingItem.note" type="textarea" placeholder="备注信息" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editItemDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmEditItem">保存修改</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 检查报告对话框 -->
+    <el-dialog v-model="reportVisible" title="材料准备检查报告" width="600px">
+      <div class="report-content">
+        <el-card class="report-summary-card">
+          <div class="report-summary">
+            <div class="summary-stat">
+              <div class="stat-value" style="color: #67c23a;">{{ completedCount }}</div>
+              <div class="stat-label">已完成</div>
+            </div>
+            <div class="summary-stat">
+              <div class="stat-value" style="color: #e6a23c;">{{ pendingCount }}</div>
+              <div class="stat-label">未完成</div>
+            </div>
+            <div class="summary-stat">
+              <div class="stat-value" style="color: #667eea;">{{ completionRate }}%</div>
+              <div class="stat-label">完成率</div>
+            </div>
+          </div>
+          <el-progress :percentage="completionRate" :color="progressColor" style="margin-top: 15px;" />
+        </el-card>
+
+        <div v-if="pendingItems.length > 0" class="pending-section">
+          <h4 class="pending-title">⚠️ 待完成材料 ({{ pendingItems.length }}项)</h4>
+          <el-table :data="pendingItems" size="small" border>
+            <el-table-column prop="name" label="材料名称" />
+            <el-table-column prop="categoryName" label="分类" width="100" />
+            <el-table-column prop="note" label="备注" />
+            <el-table-column label="操作" width="80">
+              <template #default="{ row }">
+                <el-button size="small" type="success" text @click="markCompleted(row)">完成</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <el-empty v-else description="所有材料已准备完成！🎉" />
+
+        <div v-if="completedItems.length > 0" class="completed-section">
+          <h4 class="completed-title">✅ 已完成材料 ({{ completedItems.length }}项)</h4>
+          <div class="completed-list">
+            <el-tag v-for="item in completedItems" :key="item.name" type="success" style="margin: 4px;">
+              {{ item.name }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 添加自定义材料对话框 -->
     <el-dialog v-model="itemDialogVisible" title="添加自定义材料" width="400px">
       <el-form :model="newItem" label-width="80px">
         <el-form-item label="材料名称">
           <el-input v-model="newItem.name" placeholder="如：作品集" />
         </el-form-item>
+        <el-form-item label="所属分类">
+          <el-select v-model="newItem.category" style="width: 100%;">
+            <el-option label="必需材料" value="required" />
+            <el-option label="推荐材料" value="recommended" />
+            <el-option label="可选材料" value="optional" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="newItem.note" type="textarea" />
+          <el-input v-model="newItem.note" type="textarea" placeholder="备注信息（可选）" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -310,7 +380,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getProviders, sendMessageToAI } from '@/utils/ai-api'
 import { jsPDF } from 'jspdf'
@@ -320,6 +390,9 @@ const activeTab = ref('essay')
 const currentEssayType = ref('ps')
 const essayContent = ref('')
 const itemDialogVisible = ref(false)
+const editItemDialogVisible = ref(false)
+const editingItem = reactive({ name: '', note: '', category: '', index: -1 })
+const reportVisible = ref(false)
 const versionsVisible = ref(false)
 const activeCategory = ref(['required'])
 const selectedProvider = ref(null)
@@ -836,7 +909,7 @@ const getCategoryItems = (catId) => {
 }
 
 const updateProgress = () => {
-  console.log('Progress updated:', completionRate.value)
+  localStorage.setItem('materials_checklist', JSON.stringify(allItems.value))
 }
 
 const addCustomItem = () => {
@@ -854,6 +927,7 @@ const confirmAddItem = () => {
     completed: false,
     note: newItem.note
   })
+  localStorage.setItem('materials_checklist', JSON.stringify(allItems.value))
   ElMessage.success('已添加')
   itemDialogVisible.value = false
   Object.assign(newItem, { name: '', note: '', category: 'required' })
@@ -861,12 +935,63 @@ const confirmAddItem = () => {
 
 const editItem = (categoryId, index) => {
   const item = allItems.value[categoryId][index]
-  ElMessage.info(`编辑: ${item.name}`)
-  // 实际实现需要编辑对话框
+  editingItem.name = item.name
+  editingItem.note = item.note
+  editingItem.category = categoryId
+  editingItem.index = index
+  editItemDialogVisible.value = true
 }
+
+const confirmEditItem = () => {
+  if (!editingItem.name) {
+    ElMessage.warning('请输入材料名称')
+    return
+  }
+  allItems.value[editingItem.category][editingItem.index].name = editingItem.name
+  allItems.value[editingItem.category][editingItem.index].note = editingItem.note
+  localStorage.setItem('materials_checklist', JSON.stringify(allItems.value))
+  ElMessage.success('材料已更新')
+  editItemDialogVisible.value = false
+}
+
+const markCompleted = (row) => {
+  row.completed = true
+  updateProgress()
+  ElMessage.success('已标记为完成')
+}
+
+const completedItems = computed(() => {
+  const items = []
+  const catNames = { required: '必需材料', recommended: '推荐材料', optional: '可选材料' }
+  for (const [cat, catName] of Object.entries(catNames)) {
+    for (const item of allItems.value[cat] || []) {
+      if (item.completed) {
+        items.push({ ...item, categoryName: catName })
+      }
+    }
+  }
+  return items
+})
+
+const pendingItems = computed(() => {
+  const items = []
+  const catNames = { required: '必需材料', recommended: '推荐材料', optional: '可选材料' }
+  for (const [cat, catName] of Object.entries(catNames)) {
+    for (const item of allItems.value[cat] || []) {
+      if (!item.completed) {
+        items.push({ ...item, categoryName: catName })
+      }
+    }
+  }
+  return items
+})
+
+const completedCount = computed(() => completedItems.value.length)
+const pendingCount = computed(() => pendingItems.value.length)
 
 const removeItem = (categoryId, index) => {
   allItems.value[categoryId].splice(index, 1)
+  localStorage.setItem('materials_checklist', JSON.stringify(allItems.value))
   ElMessage.success('已删除')
 }
 
@@ -1105,18 +1230,23 @@ const exportCSV = () => {
 }
 
 const generateReport = () => {
-  const total = Object.values(allItems.value).flat().length
-  const completed = completionRate.value
-  ElMessage.success(`您已完成 ${completed}% 的材料准备 (${Math.round(total * completed / 100)}/${total})`)
+  reportVisible.value = true
 }
 
 const resetChecklist = () => {
-  Object.keys(allItems.value).forEach(cat => {
-    allItems.value[cat].forEach(item => {
-      item.completed = false
+  ElMessageBox.confirm('确定要重置所有材料清单吗？这将清除所有勾选状态。', '确认重置', {
+    confirmButtonText: '确定重置',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    Object.keys(allItems.value).forEach(cat => {
+      allItems.value[cat].forEach(item => {
+        item.completed = false
+      })
     })
-  })
-  ElMessage.success('清单已重置')
+    localStorage.setItem('materials_checklist', JSON.stringify(allItems.value))
+    ElMessage.success('清单已重置')
+  }).catch(() => {})
 }
 
 onMounted(() => {
@@ -1247,13 +1377,6 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-.word-count {
-  text-align: right;
-  color: #909399;
-  font-size: 13px;
-  margin-top: 8px;
-}
-
 .progress-card {
   margin-bottom: 20px;
 }
@@ -1278,6 +1401,62 @@ onMounted(() => {
   width: 100%;
   margin-top: 15px;
   border-style: dashed !important;
+}
+
+/* 检查报告对话框样式 */
+.report-content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.report-summary-card {
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+}
+
+.report-summary {
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 0;
+}
+
+.summary-stat {
+  text-align: center;
+}
+
+.summary-stat .stat-value {
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.summary-stat .stat-label {
+  font-size: 13px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.pending-section {
+  margin-top: 20px;
+}
+
+.pending-title {
+  margin-bottom: 12px;
+  color: #e6a23c;
+}
+
+.completed-section {
+  margin-top: 20px;
+}
+
+.completed-title {
+  margin-bottom: 12px;
+  color: #67c23a;
+}
+
+.completed-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* PDF预览样式 */
