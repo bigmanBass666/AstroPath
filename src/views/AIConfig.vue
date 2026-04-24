@@ -65,6 +65,7 @@
           </button>
         </div>
 
+        <!-- 原 SECURITY NOTICE 内容已暂存保留
         <div class="security-notice">
           <div class="notice-glass">
             <div class="notice-noise" />
@@ -88,6 +89,36 @@
               <span class="notice-divider" />
               <span class="notice-text">
                 本系统预置开发者 API Key（<span class="notice-model">{{ zhipuModelName }}</span>）仅供演示使用。<span class="notice-emphasis">严禁提取、传播或用于任何其他目的</span>，违者将承担相应法律责任。
+              </span>
+            </div>
+          </div>
+        </div>
+        -->
+
+        <div class="security-notice">
+          <div class="notice-glass">
+            <div class="notice-noise" />
+            <div class="notice-accent" />
+            <div class="notice-icon-wrap">
+              <svg
+                class="notice-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4m0-4h.01" />
+              </svg>
+            </div>
+            <div class="notice-content">
+              <span class="notice-label">USAGE NOTICE</span>
+              <span class="notice-divider" />
+              <span class="notice-text">
+                使用 AI 功能，需先免费申请一个智谱 API Key 😊
+                申请地址：<a href="https://www.bigmodel.cn/apikey/platform" target="_blank" rel="noopener">https://www.bigmodel.cn/apikey/platform</a>
               </span>
             </div>
           </div>
@@ -565,7 +596,7 @@ const addZhipuPreset = () => {
     name: zhipuModelName.value + '（推荐）',
     type: 'domestic',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    apiKey: import.meta.env.VITE_ZHIPU_API_KEY || '',
+    apiKey: '',
     model: ZHIPU_MODEL_ID,
     status: 'untested',
     id: Date.now(),

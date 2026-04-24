@@ -4,4 +4,7 @@
 
 💥💥一包纸巾💥💥
 
-🎉🎉🥳🥳
+使用ai功能, 需先免费申请一个智谱api key😊
+
+申请地址: <https://www.bigmodel.cn/apikey/platform>
+
