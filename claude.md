@@ -1,106 +1,10 @@
-# 智途 AstroPath — 项目上下文手册
+# CLAUDE.md
 
-> **重要**: 本文件是项目的核心文档，**硬性约束（配色/安全/文案/评分等）见下方「核心约束」章节**，违反即扣分。本手册聚焦：架构细节、文件索引、开发规范、踩坑经验。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
----
+## 项目概述
 
-## 项目概览
-
-| 项目 | 说明 |
-|------|------|
-| **项目名称** | 智途 AstroPath（一站式智能留学规划平台） |
-| **技术栈** | Vue 3 + Vite + Element Plus + Pinia + Vue Router |
-| **比赛** | 人工智能学院第四届科创节网页设计大赛（2026/4/7） |
-| **评分** | 设计40 + 功能30 + **创新30（AI交互）** + 展示10 |
-| **开发优先级** | AI 交互相关优化 > 其他所有功能（创新性30分是关键得分点） |
-| **设计美学** | 使用 `awwwards-design` skill 作为设计美学指导 |
-
----
-
-## 核心约束（违反即扣分）
-
-### 配色系统
-- 主色 `#0F172A`（Slate-900）— 唯一交互色
-- 强调色 `#D97706`（Amber-600）— 唯一彩色点缀，极度克制
-- 背景 `#FFFFFF` 白色为主
-- 变量定义: `src/styles/variables.css`
-- **严禁引入任何新配色**
-
-### 安全红线
-- `AIConfig.vue` 内含硬编码 API Key
-- **严禁 git 提交、严禁公开暴露**
-
-
----
-
-## 设计规范
-
-> **AI 开发必读**: 本项目设计美学使用 `awwwards-design` skill 指导。当涉及页面设计、组件样式、动画交互时，**必须**先调用此 skill。
-
-### 项目特有约束
-
-在遵循 `awwwards-design` skill 的基础上，本项目还有以下硬性约束：
-
-**配色系统**:
-- 主色 `#0F172A`（Slate-900）— 唯一交互色
-- 强调色 `#D97706`（Amber-600）— 唯一彩色点缀
-- 背景 `#FFFFFF` 白色为主
-- **严禁引入任何新配色**
-
-**字体限制**:
-- 数据/数字/标签 → `var(--font-family-mono)` (JetBrains Mono)
-- **禁止使用** Inter / Roboto / Arial / Helvetica
-
-**命名规范**:
-- BEM 格式，统一 `ud-` 前缀（如 `.ud-card__accent--danger`）
-
-**无障碍**:
-- 所有包含动画的页面/组件**必须**添加 `prefers-reduced-motion` 媒体查询
-
----
-
-
----
-
-## 踩坑经验库
-
-### 2. Awwwards 设计规范（继续补充）
-
-项目采用 Awwwards 级设计语言，新页面/组件需遵循：
-
-**命名**: BEM 格式，统一 `ud-` 前缀（如 `.ud-card__accent--danger`）
-
-**字体**:
-- 数据/数字/标签 → `var(--font-family-mono)` (JetBrains Mono)
-- **禁止使用** Inter / Roboto
-
-**纹理**: 全页 SVG fractalNoise 叠加层，`opacity: 0.03`
-
-**动画曲线**:
-- 入场动画: `cubic-bezier(0.16, 1, 0.3, 1)` — Expo Out
-- 悬停微交互: `cubic-bezier(0.34, 1.56, 0.64, 1)` — Back Out
-
-**交互模式**:
-- 筛选芯片激活态 → 边框强调 + `rgba(15,23,42,0.06)` 底色，不用实色填充
-- 卡片悬停 → CSS 3D perspective 倾斜（`--mx/--my` 变量驱动）
-
-**禁止事项**:
-- ❌ 蓝白通用配色
-- ❌ 三栏 features section 布局
-- ❌ 渐变 hero banner
-- ❌ Inter/Roboto 字体
-
-### 3. 无障碍：减少动画偏好
-
-所有包含动画的页面/组件**必须**添加：
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition-duration: 0.01ms !important; }
-}
-```
-
----
+智途 AstroPath — 一站式智能留学规划平台。Vue 3 + Vite 单页应用，集成 AI 对话（智谱 GLM）、ECharts 数据可视化、Markdown 渲染。人工智能学院网页设计大赛参赛项目。
 
 ## 开发命令
 
@@ -112,3 +16,90 @@ npm run lint                 # ESLint 检查并自动修复
 npm run typecheck            # TypeScript 类型检查 (vue-tsc --noEmit)
 npm run precommit            # 提交前类型检查（git hook 调用）
 ```
+
+pre-commit hook（`simple-git-hooks`）会自动运行 `npm run typecheck`，类型错误会阻断提交。
+
+## 架构要点
+
+### AI 调用链路
+
+```
+页面组件 → useAIStream (composable)
+         → useGlobalAIState (全局 AI 状态，管理并发流)
+         → ai-api.js (API 调用，多 provider 适配)
+         → Vite proxy /ai-proxy/ → 智谱 open.bigmodel.cn
+```
+
+- `useAIStream`：单个任务级流式调用，处理 SSE、重试、状态机
+- `useGlobalAIState`：全局状态中心，管理活跃流、队列、并发控制
+- `ai-api.js`：provider 适配层，统一 OpenAI 兼容接口
+
+### 数据持久化
+
+所有用户数据存 `localStorage`，由 `useStorage` composable 封装（自动加 `astropath_` 前缀）。无后端服务器，清除浏览器数据会丢失。
+
+### 状态管理
+
+用 composables 模式替代 Pinia，每个业务域一个 composable：
+- `useAssessmentState` — 背景评估表单
+- `useAIConfig` — AI provider 配置
+- `useMaterialsState` — 材料中心状态
+- `useDatabaseState` — 院校数据库状态
+- `useGlobalRecommendationState` — 选校推荐状态
+
+### 路由
+
+Hash 模式（`createWebHashHistory`），URL 带 `#`（如 `http://localhost:3000/#/assessment`）。沉浸式页面（`/ai-chat`、`/story`、`/result`）隐藏顶栏。
+
+### 静态数据
+
+`src/data/` 含多版本数据（v1/v2/v3），为数据结构迭代产物。院校、专业等数据为 JS/TS 静态导出。
+
+### 路径别名
+
+`@` → `src/`（配置在 `vite.config.js`），import 用 `@/views/Home.vue` 而非相对路径。
+
+## 核心约束（违反即扣分）
+
+### 配色系统
+
+只使用 `src/styles/variables.css` 中已定义的变量，禁止硬编码色值或新增颜色变量。
+
+- 主色 `#0F172A`（Slate-900）— 唯一交互色（按钮、文字、边框）
+- 强调色 `#D97706`（Amber-600）— 唯一彩色点缀（下划线、活跃态、footer 光线），极度克制
+- 背景 `#FFFFFF` 白色为主
+- 禁止：蓝白通用配色、渐变 hero banner、三栏 features section 布局
+
+### 字体
+
+- 数据/数字/标签 → `var(--font-family-mono)`（JetBrains Mono）
+- 禁止使用 Inter / Roboto / Arial / Helvetica 作为显示字体
+
+### CSS 命名
+
+BEM 格式，统一 `ud-` 前缀：
+```css
+.ud-card__accent--danger   /* Good */
+.card-accent               /* Bad */
+```
+
+### 动画
+
+- 入场：`cubic-bezier(0.16, 1, 0.3, 1)`（Expo Out）
+- 悬停微交互：`cubic-bezier(0.34, 1.56, 0.64, 1)`（Back Out）
+- 筛选芯片激活态 → 边框强调 + `rgba(15,23,42,0.06)` 底色，不用实色填充
+- 卡片悬停 → CSS 3D perspective 倾斜（`--mx/--my` 变量驱动）
+- 纹理：全页 SVG fractalNoise 叠加层，`opacity: 0.03`
+
+### 无障碍
+
+所有包含动画的组件必须添加：
+```css
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition-duration: 0.01ms !important; }
+}
+```
+
+### 安全红线
+
+`AIConfig.vue` 内含硬编码 API Key，严禁 git 提交、严禁公开暴露。
