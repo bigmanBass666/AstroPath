@@ -86,32 +86,13 @@ const router = createRouter({
   routes,
   scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) return savedPosition
-    return new Promise((resolve) => {
-      const resetScroll = () => {
-        const appMain = document.querySelector('.app-main')
-        if (appMain) appMain.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-        document.documentElement.scrollTop = 0
-        document.body.scrollTop = 0
-      }
-      resetScroll()
-      requestAnimationFrame(resetScroll)
-      resolve({ top: 0, left: 0 })
-    })
+    return { top: 0, left: 0 }
   }
 })
 
 router.beforeEach((to) => {
   document.title = `${to.meta.title || '首页'} - 智途 AstroPath`
   return true
-})
-
-router.afterEach(() => {
-  const appMain = document.querySelector('.app-main')
-  if (appMain) appMain.scrollTo({ top: 0, behavior: 'instant' })
-  window.scrollTo({ top: 0, behavior: 'instant' })
-  document.documentElement.scrollTop = 0
-  document.body.scrollTop = 0
 })
 
 export default router

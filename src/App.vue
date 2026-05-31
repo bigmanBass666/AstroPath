@@ -86,11 +86,6 @@
         />
       </router-view>
     </el-main>
-    <SiteFooter
-      v-if="false"
-      @show-guide="showGuide"
-      @show-contact="showContact"
-    />
 
     <!-- 移动端导航抽屉 -->
     <el-drawer
@@ -191,11 +186,10 @@
 </template>
 
 <script setup>
-import { computed, ref, provide } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Expand, Menu, Close, Document, Cpu, DataLine } from '@element-plus/icons-vue'
 import Logo from './components/common/Logo.vue'
-import SiteFooter from './components/common/SiteFooter.vue'
 import AnnouncementButton from './components/common/AnnouncementButton.vue'
 
 const route = useRoute()
@@ -229,22 +223,6 @@ const menuItems = [...coreMenuItems, ...moreMenuItems]
 const navigateTo = (path) => {
   router.push(path)
   mobileMenuVisible.value = false
-}
-
-const guideVisible = ref(false)
-const aboutVisible = ref(false)
-const contactVisible = ref(false)
-
-provide('guideVisible', guideVisible)
-provide('aboutVisible', aboutVisible)
-provide('contactVisible', contactVisible)
-
-const showGuide = () => {
-  guideVisible.value = true
-}
-
-const showContact = () => {
-  contactVisible.value = true
 }
 </script>
 
