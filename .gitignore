@@ -52,6 +52,9 @@ echarts/
 # Local Netlify folder
 .netlify
 
+# Claude Code agents (user-level, not project source)
+.claude/agents/
+
 # Auto-generated plugin files
 auto-imports.d.ts
 components.d.ts
