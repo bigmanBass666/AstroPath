@@ -1411,10 +1411,10 @@ function initRadarChart() {
       ],
       shape: 'polygon',
       splitNumber: 4,
-      axisName: { color: 'var(--color-slate-500)', fontSize: 12 },
-      splitLine: { lineStyle: { color: 'var(--color-slate-200)' } },
-      splitArea: { areaStyle: { color: ['var(--color-background)', 'var(--color-slate-50)', 'var(--color-background)', 'var(--color-slate-50)'] } },
-      axisLine: { lineStyle: { color: 'var(--color-slate-200)' } }
+      axisName: { color: '#64748B', fontSize: 12 },
+      splitLine: { lineStyle: { color: '#E2E8F0' } },
+      splitArea: { areaStyle: { color: ['#FFFFFF', '#F8FAFC', '#FFFFFF', '#F8FAFC'] } },
+      axisLine: { lineStyle: { color: '#E2E8F0' } }
     },
     series: [{
       type: 'radar',
@@ -1426,9 +1426,9 @@ function initRadarChart() {
           Math.min(form.practice.internships.length * 1.2, 5),
           3.5
         ],
-        areaStyle: { color: 'rgba(var(--color-accent-rgb), 0.2)' },
-        lineStyle: { color: 'var(--color-accent)', width: 2 },
-        itemStyle: { color: 'var(--color-accent)' }
+        areaStyle: { color: 'rgba(217, 119, 6, 0.2)' },
+        lineStyle: { color: '#D97706', width: 2 },
+        itemStyle: { color: '#D97706' }
       }]
     }]
   })
@@ -1479,7 +1479,8 @@ async function generateReport() {
 function renderAiContent(content) {
   if (!content) return ''
   try {
-    const html = marked(content, {
+    const fixed = content.replace(/^(#{1,6})([^\s#])/gm, '$1 $2')
+    const html = marked(fixed, {
       breaks: true,
       gfm: true
     })
