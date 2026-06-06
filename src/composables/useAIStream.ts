@@ -113,73 +113,22 @@ export function useAIStream(options: UseAIStreamOptions): AIStreamResult {
   const queuePositionRef = ref<number>(0)
   const retryCountRef = ref<number>(0)
   const maxRetriesRef = ref<number>(0)
+const taskWatchers: (() => void)[] = []
 
-  watch(
-    () => globalState._getRawTask(taskId)?.content,
-    (newContent) => {
-      if (newContent !== undefined) {
-        contentRef.value = newContent
-      }
-    },
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.reasoning,
-    (newReasoning) => {
-      if (newReasoning !== undefined) {
-        reasoningRef.value = newReasoning
-      }
-    },
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.error,
-    (newError) => {
-      errorRef.value = newError || null
-    },
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.state,
-    () => {},
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.showReasoning,
-    (newVal) => {
-      showReasoningRef.value = newVal ?? true
-    },
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.queuePosition,
-    (newVal) => {
-      queuePositionRef.value = newVal || 0
-    },
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.retryCount,
-    (newVal) => {
-      retryCountRef.value = newVal || 0
-    },
-    { immediate: true }
-  )
-  
-  watch(
-    () => globalState._getRawTask(taskId)?.maxRetries,
-    (newVal) => {
-      maxRetriesRef.value = newVal || globalState.getConfig().retryAttempts
-    },
-    { immediate: true }
-  )
+const syncFields: { get: () => unknown; set: (v: unknown) => void; def: unknown }[] = [
+  { get: () => globalState._getRawTask(taskId)?.content, set: v => { if (v !== undefined) contentRef.value = v as string }, def: '' },
+  { get: () => globalState._getRawTask(taskId)?.reasoning, set: v => { if (v !== undefined) reasoningRef.value = v as string }, def: '' },
+  { get: () => globalState._getRawTask(taskId)?.error, set: v => { errorRef.value = (v as string) || null }, def: null },
+  { get: () => globalState._getRawTask(taskId)?.state, set: () => {}, def: 'idle' },
+  { get: () => globalState._getRawTask(taskId)?.showReasoning, set: v => { showReasoningRef.value = (v as boolean) ?? true }, def: true },
+  { get: () => globalState._getRawTask(taskId)?.queuePosition, set: v => { queuePositionRef.value = (v as number) || 0 }, def: 0 },
+  { get: () => globalState._getRawTask(taskId)?.retryCount, set: v => { if (v !== undefined) retryCountRef.value = v as number }, def: 0 },
+  { get: () => globalState._getRawTask(taskId)?.maxRetries, set: v => { maxRetriesRef.value = (v as number) || globalState.getConfig().retryAttempts }, def: globalState.getConfig().retryAttempts }
+]
 
+syncFields.forEach(field => {
+  taskWatchers.push(watch(field.get, field.set as (v: unknown) => void, { immediate: true }))
+})
   const content = computed<string>(() => {
     return contentRef.value ?? ''
   })
@@ -440,6 +389,8 @@ export function useAIStream(options: UseAIStreamOptions): AIStreamResult {
   const cleanupWatchers = () => {
     activeWatchers.forEach(w => w())
     activeWatchers.length = 0
+    taskWatchers.forEach(w => w())
+    taskWatchers.length = 0
     if (scrollRafId) { cancelAnimationFrame(scrollRafId); scrollRafId = null }
     if (rafScrollId) { cancelAnimationFrame(rafScrollId); rafScrollId = null }
   }
@@ -575,6 +526,7 @@ export function useAIStream(options: UseAIStreamOptions): AIStreamResult {
   onUnmounted(() => {
     if (abortController) {
       abortController.abort()
+    cleanupWatchers()
     }
     if (scrollRafId) { cancelAnimationFrame(scrollRafId); scrollRafId = null }
     if (rafScrollId) { cancelAnimationFrame(rafScrollId); rafScrollId = null }
