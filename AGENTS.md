@@ -1,6 +1,6 @@
 # 智途 AstroPath — AGENTS.md
 
-Vue 3 + Vite 单页应用，智能留学规划平台。集成 AI 对话（智谱 GLM）、ECharts 数据可视化、Markdown 渲染。
+Vue 3 + Vite 单页应用，智能留学规划平台。集成 AI 对话（智谱 AI BigModel）、ECharts 数据可视化、Markdown 渲染。
 
 ## Dev Environment Tips
 
@@ -20,9 +20,10 @@ npm run typecheck            # TypeScript 类型检查（git pre-commit hook 自
 | 命令 | 用途 |
 |------|------|
 | `npm run build` | 生产构建 |
-| `npm run typecheck` | 类型检查（阻断提交的 hook） |
+| `npm run typecheck` | 类型检查（pre-commit hook 自动调用） |
 | `npm run lint` | ESLint 自动修复 |
 | `npm run preview` | 预览构建产物 |
+| `npm run dev` | 开发服务器 |
 
 ## Project Structure
 
@@ -126,9 +127,10 @@ import { useAssessmentState } from '@/composables/useAssessmentState'
 ## Boundaries
 
 ### ✅ 自主执行
-- 在 `refactor/audit-fixes` 分支上修改代码
+- 在 master 分支上修改代码（分支策略见下）
 - 运行 `npm run typecheck` 和 `npm run lint`
-- 提交代码并推送到 `refactor/audit-fixes`
+- 提交代码并推送到 master
+- 新建功能分支：`feature/xxx`、`bugfix/xxx`，开发完成后 PR 合入 master
 - 修改 `src/views/`、`src/components/`、`src/composables/`、`src/styles/` 下的文件
 
 ### ⚠️ 先确认
@@ -147,7 +149,7 @@ import { useAssessmentState } from '@/composables/useAssessmentState'
 
 ## Common Pitfalls
 
-1. **Git 操作必须在正确分支**：当前开发分支是 `refactor/audit-fixes`，不是 master
+1. **Git 操作必须在正确分支**：当前主分支是 `master`，功能开发用 `feature/xxx`、`bugfix/xxx` 分支
 2. **提交前 typecheck**：pre-commit hook 会自动运行 `vue-tsc --noEmit`，类型错误会阻断提交
 3. **Element Plus 组件自动引入**：项目配置了 `unplugin-vue-components`，无需手动 `import { ElButton } from 'element-plus'`，但图标仍需手动导入
 4. **ECharts 按需引入**：使用 `import * as echarts from 'echarts/core'` + 具体模块，不要 `import * as echarts from 'echarts'`
