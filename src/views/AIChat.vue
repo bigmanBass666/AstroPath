@@ -691,19 +691,19 @@ const sendMessage = async () => {
 
     const stream = useAIStream({ taskId: `chat-${currentAgentId.value}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, enableThinking: enableThinking.value, autoRestore: false, autoScroll: true, scrollContainer: () => messagesContainer.value })
     setCurrentStream(stream)
-    let hasReasoningContent = false
+ let hasReasoningContent = false
+ const aiMsgRef = ref(aiMsg)
 
-    const pollInterval = setInterval(() => {
-      if (stream.content.value) { msgs[aiIdx].content = stream.content.value; msgs[aiIdx].isThinking = false }
-      if (enableThinking.value && stream.reasoning.value) {
-        if (!hasReasoningContent && stream.reasoning.value.length > 50) { hasReasoningContent = true; msgs[aiIdx].showReasoning = true }
-        msgs[aiIdx].reasoning = stream.reasoning.value
-      }
-      if (stream.content.value && stream.content.value.length > 100 && hasReasoningContent) msgs[aiIdx].showReasoning = false
-      if (!stream.isStreaming.value && !stream.isThinking.value) clearInterval(pollInterval)
-    }, 100)
+ const unwatchContent = watch(() => stream.content.value, (v) => {
+  aiMsgRef.value.content = v
+  if (v && v.length > 100 && hasReasoningContent) aiMsgRef.value.showReasoning = false
+ })
+ const unwatchReasoning = watch(() => stream.reasoning.value, (v) => {
+  aiMsgRef.value.reasoning = v
+  if (!hasReasoningContent && v && v.length > 50) { hasReasoningContent = true; aiMsgRef.value.showReasoning = true }
+ })
 
-    try { await stream.generateWithProvider(selectedProvider.value, apiMessages) } finally { clearInterval(pollInterval) }
+ try { await stream.generateWithProvider(selectedProvider.value, apiMessages) } finally { unwatchContent(); unwatchReasoning() }
 
     if (stream.content.value) msgs[aiIdx].content = stream.content.value
     if (enableThinking.value && stream.reasoning.value) msgs[aiIdx].reasoning = stream.reasoning.value
