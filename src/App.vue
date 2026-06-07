@@ -202,6 +202,9 @@ const isHomePage = computed(() => route.path === '/')
 const isAIConfigPage = computed(() => route.path === '/ai-config')
 
 const mobileMenuVisible = ref(false)
+const guideVisible = ref(false)
+const aboutVisible = ref(false)
+const contactVisible = ref(false)
 
 const coreMenuItems = [
   { path: '/', name: '首页' },

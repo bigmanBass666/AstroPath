@@ -479,12 +479,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeft, User, WarningFilled, Clock,
-  Promotion, VideoPause, Search,
+  ArrowLeft, WarningFilled, Clock,
+  Promotion, VideoPause,
   Cpu, ArrowDown, Check, Plus,
   School, DocumentCopy, OfficeBuilding, Stamp,
   Select, RefreshRight, Expand, Fold
@@ -554,7 +554,6 @@ const lastError = ref(null)
 const userData = ref(null)
 const enableThinking = ref(true)
 const searchQuery = ref('')
-const CHAT_STATE_KEY_PREFIX = 'ai_chat_state_'
 const agentStreams = ref({})
 const getCurrentStream = () => agentStreams.value[currentAgentId.value]
 const setCurrentStream = (stream) => { agentStreams.value[currentAgentId.value] = stream }
@@ -673,35 +672,44 @@ const selectAgent = (id) => {
 const toggleThinking = () => { enableThinking.value = !enableThinking.value }
 const useQuickPrompt = (prompt) => { inputMessage.value = prompt; sendMessage() }
 const autoResize = (e) => { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px' }
+const resetTextareaHeight = () => {
+  const textarea = document.querySelector('.chat-textarea')
+  if (textarea) { textarea.style.height = 'auto'; textarea.style.height = '' }
+}
+
+const pollAndSync = (stream, aiIdx, msgs) => {
+  let hasReasoningContent = false
+  const pollInterval = setInterval(() => {
+    if (stream.content.value) { msgs[aiIdx].content = stream.content.value; msgs[aiIdx].isThinking = false }
+    if (enableThinking.value && stream.reasoning.value) {
+      if (!hasReasoningContent && stream.reasoning.value.length > 50) { hasReasoningContent = true; msgs[aiIdx].showReasoning = true }
+      msgs[aiIdx].reasoning = stream.reasoning.value
+    }
+    if (stream.content.value && stream.content.value.length > 100 && hasReasoningContent) msgs[aiIdx].showReasoning = false
+    if (!stream.isStreaming.value && !stream.isThinking.value) clearInterval(pollInterval)
+  }, 100)
+  return pollInterval
+}
 
 const sendMessage = async () => {
   isFreshEntry = false
   if (!inputMessage.value.trim()) { ElMessage.warning('请输入消息'); return }
 
   const msgs = getCurrentMessages()
-  const userMsg = { id: Date.now(), role: 'user', content: inputMessage.value, timestamp: Date.now() }
-  msgs.push(userMsg); inputMessage.value = ''; clearError(); scrollToBottom(true)
+  const now = Date.now()
+  const userMsg = { id: now, role: 'user', content: inputMessage.value, timestamp: now }
+  msgs.push(userMsg); inputMessage.value = ''; resetTextareaHeight(); clearError(); scrollToBottom(true)
 
-  const aiMsg = { id: Date.now() + 1, role: 'assistant', content: '', reasoning: '', showReasoning: false, isThinking: enableThinking.value, timestamp: Date.now() }
+  const aiMsg = { id: now + 1, role: 'assistant', content: '', reasoning: '', showReasoning: false, isThinking: enableThinking.value, timestamp: now + 1 }
   msgs.push(aiMsg); const aiIdx = msgs.length - 1
 
   try {
     const systemPrompt = buildSystemPrompt(currentAgentId.value, userData.value, enableThinking.value)
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...msgs.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.content }))]
 
-    const stream = useAIStream({ taskId: `chat-${currentAgentId.value}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, enableThinking: enableThinking.value, autoRestore: false, autoScroll: true, scrollContainer: () => messagesContainer.value })
+    const stream = useAIStream({ taskId: `chat-${currentAgentId.value}-${now}-${Math.random().toString(36).slice(2, 9)}`, enableThinking: enableThinking.value, autoRestore: false, autoScroll: true, scrollContainer: () => messagesContainer.value })
     setCurrentStream(stream)
-    let hasReasoningContent = false
-
-    const pollInterval = setInterval(() => {
-      if (stream.content.value) { msgs[aiIdx].content = stream.content.value; msgs[aiIdx].isThinking = false }
-      if (enableThinking.value && stream.reasoning.value) {
-        if (!hasReasoningContent && stream.reasoning.value.length > 50) { hasReasoningContent = true; msgs[aiIdx].showReasoning = true }
-        msgs[aiIdx].reasoning = stream.reasoning.value
-      }
-      if (stream.content.value && stream.content.value.length > 100 && hasReasoningContent) msgs[aiIdx].showReasoning = false
-      if (!stream.isStreaming.value && !stream.isThinking.value) clearInterval(pollInterval)
-    }, 100)
+    const pollInterval = pollAndSync(stream, aiIdx, msgs)
 
     try { await stream.generateWithProvider(selectedProvider.value, apiMessages) } finally { clearInterval(pollInterval) }
 
@@ -712,6 +720,8 @@ const sendMessage = async () => {
   } catch (error) {
     lastError.value = { title: '请求失败', message: error.message || '请检查网络连接或重试' }
     msgs[aiIdx].content = `抱歉，请求失败：${error.message}。`
+    // Keep stream reference so retry can reuse it
+    setCurrentStream(stream)
   } finally { setCurrentStream(null); saveCurrentState(); nextTick(() => scrollToBottom()) }
 }
 
@@ -754,7 +764,30 @@ const handleUserScroll = () => { if (!messagesContainer.value) return; const str
 const clearError = () => { lastError.value = null }
 const startNewChat = () => { const msgs = getCurrentMessages(); if (msgs.length > 0) saveConversation(); msgs.length = 0; currentConversationId.value = null; clearCurrentState(); ElMessage.success('已开始新对话') }
 const stopGeneration = () => { const stream = getCurrentStream(); if (stream) { stream.stop(); setCurrentStream(null) } stopActiveGeneration(); saveCurrentState() }
-const handleRetry = async () => { clearError(); await retryActiveStream() }
+const handleRetry = async () => {
+  clearError()
+  const stream = getCurrentStream()
+  if (!stream) return
+  const msgs = getCurrentMessages()
+  const aiIdx = msgs.length - 1
+  // Clear error content and show generating state
+  msgs[aiIdx].content = ''
+  msgs[aiIdx].reasoning = ''
+  msgs[aiIdx].showReasoning = false
+  msgs[aiIdx].isThinking = enableThinking.value
+  const pollInterval = pollAndSync(stream, aiIdx, msgs)
+  try {
+    await retryActiveStream()
+  } finally {
+    clearInterval(pollInterval)
+    if (stream.content.value) msgs[aiIdx].content = stream.content.value
+    if (enableThinking.value && stream.reasoning.value) msgs[aiIdx].reasoning = stream.reasoning.value
+    msgs[aiIdx].showReasoning = false
+    msgs[aiIdx].isThinking = false
+    setCurrentStream(null)
+    saveCurrentState()
+  }
+}
 
 const saveConversation = () => {
   const msgs = getCurrentMessages()
@@ -766,7 +799,20 @@ const saveConversation = () => {
   }
 }
 const getConversationById = (id) => conversations.value.find(c => c.id === id)
-const loadConversation = (conv) => { const agentId = conv.agentId || 'consultant'; if (!agentMessages.value[agentId]) agentMessages.value[agentId] = []; agentMessages.value[agentId] = conv.messages || []; currentAgentId.value = agentId; currentConversationId.value = conv.id || null; saveCurrentState() }
+const loadConversation = (conv) => {
+  // Save current agent's state before switching
+  const currentMsgs = getCurrentMessages()
+  if (currentMsgs.length > 0 && currentAgentId.value !== (conv.agentId || 'consultant')) {
+    saveConversation()
+    saveCurrentState()
+  }
+  const agentId = conv.agentId || 'consultant'
+  if (!agentMessages.value[agentId]) agentMessages.value[agentId] = []
+  agentMessages.value[agentId] = conv.messages || []
+  currentAgentId.value = agentId
+  currentConversationId.value = conv.id || null
+  saveCurrentState()
+}
 const deleteConversation = (cid) => { if (confirm('删除此对话记录？')) { conversations.value = conversations.value.filter(c => c.id !== cid); localStorage.setItem('conversations', JSON.stringify(conversations.value)); if (currentConversationId.value === cid) { const msgs = getCurrentMessages(); msgs.length = 0; currentConversationId.value = null } } }
 
 let saveTimeout = null
@@ -795,6 +841,9 @@ onMounted(() => {
   }
 })
 onUnmounted(() => {
+  // Save current conversation before leaving
+  const msgs = getCurrentMessages()
+  if (msgs.length > 0) saveConversation()
   saveCurrentState()
   const stream = getCurrentStream()
   if (stream) stream.stop()
