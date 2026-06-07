@@ -1598,6 +1598,7 @@ function initParticles() {
     document.removeEventListener('mousemove', mouseHandler)
     window.removeEventListener('resize', resizeHandler)
   }
+}
 
 
 // ═══════════════ WATCHERS ═══════════════
