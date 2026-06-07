@@ -80,8 +80,16 @@
     </el-header>
     <el-main class="app-main">
       <router-view v-slot="{ Component, route }">
+        <keep-alive>
+          <component
+            :is="Component"
+            v-if="route.meta.keepAlive"
+            :key="route.fullPath"
+          />
+        </keep-alive>
         <component
           :is="Component"
+          v-if="!route.meta.keepAlive"
           :key="route.fullPath"
         />
       </router-view>
@@ -202,6 +210,9 @@ const isHomePage = computed(() => route.path === '/')
 const isAIConfigPage = computed(() => route.path === '/ai-config')
 
 const mobileMenuVisible = ref(false)
+const guideVisible = ref(false)
+const aboutVisible = ref(false)
+const contactVisible = ref(false)
 
 const coreMenuItems = [
   { path: '/', name: '首页' },
